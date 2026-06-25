@@ -88,6 +88,7 @@ addopts = "-v --cov=src --cov-report=term-missing --cov-fail-under=80"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_ignores = true
 warn_unused_configs = true
