@@ -14,10 +14,14 @@ from cine_event_bot.io.scrapers.base import (
     SourceScraper,
 )
 from cine_event_bot.io.scrapers.cinematheque import CinemathequeScraper
+from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
 
 
 def build_scrapers(extractor: EventExtractor) -> list[SourceScraper]:
     """Build every source scraper, injecting the extractor where needed.
+
+    Text-based sources receive the LLM extractor; structured sources (which map
+    embedded JSON directly) take no extractor.
 
     Args:
         extractor: LLM-backed extractor used by text-based scrapers.
@@ -27,7 +31,7 @@ def build_scrapers(extractor: EventExtractor) -> list[SourceScraper]:
     """
     return [
         CinemathequeScraper(extractor),
-        PendingScraper(Source.PREMIERE_PROJO),
+        PremiereProjoScraper(),
         PendingScraper(Source.SORTIRAPARIS),
         PendingScraper(Source.FORUM_DES_IMAGES),
     ]
@@ -36,6 +40,7 @@ def build_scrapers(extractor: EventExtractor) -> list[SourceScraper]:
 __all__ = [
     "CinemathequeScraper",
     "PendingScraper",
+    "PremiereProjoScraper",
     "RawListing",
     "SourceScraper",
     "build_scrapers",

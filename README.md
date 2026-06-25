@@ -29,4 +29,6 @@ uv run pytest
 
 ## Architecture & decisions
 
-See [`CLAUDE.md`](CLAUDE.md) for the async data flow and key technical decisions.
+- [`CLAUDE.md`](CLAUDE.md) — async data flow and key technical decisions
+- [`docs/scraping-strategy.md`](docs/scraping-strategy.md) — how to ingest a new source (decision tree)
+- [`docs/decisions/`](docs/decisions/) — Architecture Decision Records (ADRs)
