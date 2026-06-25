@@ -11,10 +11,7 @@ from bs4 import BeautifulSoup, Tag
 
 from cine_event_bot.core.models import ScreeningEvent, Source
 from cine_event_bot.io.llm import EventExtractor
-from cine_event_bot.io.scrapers.base import RawListing
-from cine_event_bot.logging_config import get_logger
-
-logger = get_logger(__name__)
+from cine_event_bot.io.scrapers.base import RawListing, structure_via_llm
 
 _VENUE = "La Cinémathèque française"
 _INDEX_URL = "https://www.cinematheque.fr/"
@@ -109,26 +106,7 @@ class CinemathequeScraper:
         for url in self.parse_index(index_html):
             detail_html = await _fetch_text(client, url)
             listing = self.parse_detail(detail_html, url)
-            event = await self._structure(listing)
+            event = await structure_via_llm(self._extractor, listing)
             if event is not None:
                 events.append(event)
         return events
-
-    async def _structure(self, listing: RawListing) -> ScreeningEvent | None:
-        """Structure one listing via the LLM, returning None on failure."""
-        try:
-            extracted = await self._extractor.extract(listing.raw_text)
-        except Exception:
-            logger.exception(
-                "llm extraction failed",
-                extra={
-                    "ctx": {
-                        "source": listing.source.value,
-                        "url": listing.source_url,
-                    }
-                },
-            )
-            return None
-        return ScreeningEvent.from_extracted(
-            extracted, source=listing.source, source_url=listing.source_url
-        )

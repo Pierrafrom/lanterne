@@ -17,6 +17,7 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from cine_event_bot.core.models import ScreeningEvent, Source
+from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -41,6 +42,34 @@ class RawListing:
     raw_text: str
 
 
+async def structure_via_llm(
+    extractor: EventExtractor, listing: RawListing
+) -> ScreeningEvent | None:
+    """Structure one raw listing into an event via the LLM.
+
+    Shared by every text-based scraper: a listing whose extraction fails is
+    logged and skipped (returns None) so one bad listing never aborts a run.
+
+    Args:
+        extractor: LLM-backed extractor turning listing text into events.
+        listing: The raw listing to structure.
+
+    Returns:
+        The structured :class:`ScreeningEvent`, or None when extraction failed.
+    """
+    try:
+        extracted = await extractor.extract(listing.raw_text)
+    except Exception:
+        logger.exception(
+            "llm extraction failed",
+            extra={"ctx": {"source": listing.source.value, "url": listing.source_url}},
+        )
+        return None
+    return ScreeningEvent.from_extracted(
+        extracted, source=listing.source, source_url=listing.source_url
+    )
+
+
 @runtime_checkable
 class SourceScraper(Protocol):
     """A source able to yield persistable screening events."""
@@ -60,43 +89,3 @@ class SourceScraper(Protocol):
             One unpersisted :class:`ScreeningEvent` per announced screening.
         """
         ...
-
-
-class PendingScraper:
-    """Registered placeholder for a source not parsed against live HTML yet.
-
-    Lets the source appear in the registry and the pipeline run end to end
-    without it, while making the missing implementation explicit in the logs
-    rather than silently absent.
-    """
-
-    def __init__(self, source: Source) -> None:
-        """Bind the placeholder to the source it stands in for.
-
-        Args:
-            source: The source whose scraper is not implemented yet.
-        """
-        self._source = source
-
-    @property
-    def source(self) -> Source:
-        """The source this placeholder stands in for."""
-        return self._source
-
-    async def fetch_events(
-        self,
-        client: httpx.AsyncClient,  # noqa: ARG002 — required by SourceScraper protocol
-    ) -> list[ScreeningEvent]:
-        """Return no events and log that the scraper is pending.
-
-        Args:
-            client: Unused; present to satisfy the scraper protocol.
-
-        Returns:
-            An empty list.
-        """
-        logger.warning(
-            "scraper not implemented yet",
-            extra={"ctx": {"source": self._source.value}},
-        )
-        return []

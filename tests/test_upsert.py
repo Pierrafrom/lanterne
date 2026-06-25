@@ -58,7 +58,7 @@ async def test_upsert_same_screening_twice_keeps_one_row(
     repo = EventRepository(session)
     await repo.upsert(_from(_extracted(), Source.PREMIERE_PROJO, "a"))
 
-    await repo.upsert(_from(_extracted(), Source.SORTIRAPARIS, "b"))
+    await repo.upsert(_from(_extracted(), Source.FORUM_DES_IMAGES, "b"))
 
     assert await _count(repo) == 1
 
@@ -72,7 +72,7 @@ async def test_upsert_preserves_first_seen_provenance(
     )
 
     merged = await repo.upsert(
-        _from(_extracted(), Source.SORTIRAPARIS, "https://sortiraparis.com/dune")
+        _from(_extracted(), Source.FORUM_DES_IMAGES, "https://forumdesimages.fr/dune")
     )
 
     assert merged.id == first.id
@@ -89,7 +89,7 @@ async def test_upsert_merges_team_presence_with_logical_or(
     )
 
     merged = await repo.upsert(
-        _from(_extracted(has_team_present=True), Source.SORTIRAPARIS, "b")
+        _from(_extracted(has_team_present=True), Source.FORUM_DES_IMAGES, "b")
     )
 
     assert merged.has_team_present is True
@@ -102,7 +102,7 @@ async def test_upsert_fills_missing_description(session: AsyncSession) -> None:
     merged = await repo.upsert(
         _from(
             _extracted(description="En présence du réalisateur."),
-            Source.SORTIRAPARIS,
+            Source.FORUM_DES_IMAGES,
             "b",
         )
     )
@@ -117,7 +117,7 @@ async def test_upsert_keeps_existing_description(session: AsyncSession) -> None:
     )
 
     merged = await repo.upsert(
-        _from(_extracted(description="Replacement."), Source.SORTIRAPARIS, "b")
+        _from(_extracted(description="Replacement."), Source.FORUM_DES_IMAGES, "b")
     )
 
     assert merged.description == "Original."

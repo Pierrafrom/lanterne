@@ -80,7 +80,8 @@ async def test_run_deduplicates_same_screening_across_sources(session) -> None: 
             Source.CINEMATHEQUE, [_event(Source.CINEMATHEQUE, title="Dune", url="a")]
         ),
         _FakeScraper(
-            Source.SORTIRAPARIS, [_event(Source.SORTIRAPARIS, title="Dune", url="b")]
+            Source.FORUM_DES_IMAGES,
+            [_event(Source.FORUM_DES_IMAGES, title="Dune", url="b")],
         ),
     ]
     pipeline = IngestionPipeline(scrapers, repository)

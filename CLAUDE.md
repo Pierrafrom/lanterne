@@ -6,9 +6,10 @@
 ## What this project does
 
 Auto-hosted Telegram bot that aggregates **special screenings** in Paris/IDF
-(avant-premières with team, cine-concerts, retrospectives, open-air) from four
-scraped sources, sends a weekly digest, and answers natural-language questions
-about programmed films using TMDB data.
+(avant-premières with team, cine-concerts, retrospectives, open-air) from three
+scraped sources (Première Projo, La Cinémathèque française, Le Forum des images;
+see `docs/scraping-strategy.md`), sends a weekly digest, and answers
+natural-language questions about programmed films using TMDB data.
 
 ## Architecture
 
