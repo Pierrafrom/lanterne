@@ -5,11 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
-from cine_event_bot.io.scrapers import (
-    CinemathequeScraper,
-    PendingScraper,
-    build_scrapers,
-)
+from cine_event_bot.io.scrapers import CinemathequeScraper, build_scrapers
 from cine_event_bot.io.scrapers.base import SourceScraper
 
 _FIXTURES = Path(__file__).parent / "fixtures"
@@ -41,7 +37,7 @@ def _response(text: str) -> MagicMock:
     return response
 
 
-def test_registry_covers_the_four_sources() -> None:
+def test_registry_covers_every_source() -> None:
     scrapers = build_scrapers(_extractor_returning(_sample_extracted()))
 
     assert {scraper.source for scraper in scrapers} == set(Source)
@@ -119,12 +115,3 @@ async def test_fetch_events_skips_listings_whose_extraction_fails() -> None:
     events = await scraper.fetch_events(client)
 
     assert events == []
-
-
-async def test_pending_scraper_yields_nothing() -> None:
-    scraper = PendingScraper(Source.PREMIERE_PROJO)
-
-    events = await scraper.fetch_events(MagicMock())
-
-    assert events == []
-    assert scraper.source is Source.PREMIERE_PROJO

@@ -32,7 +32,6 @@ class Source(StrEnum):
     """Scraped source a screening was discovered on; value is its domain."""
 
     PREMIERE_PROJO = "premiereprojo.fr"
-    SORTIRAPARIS = "sortiraparis.com"
     CINEMATHEQUE = "cinematheque.fr"
     FORUM_DES_IMAGES = "forumdesimages.fr"
 

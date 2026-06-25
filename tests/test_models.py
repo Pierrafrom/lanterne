@@ -24,7 +24,7 @@ def _extracted() -> ExtractedEvent:
 
 def test_source_enum_carries_domain_url() -> None:
     assert Source.PREMIERE_PROJO.value == "premiereprojo.fr"
-    assert Source.SORTIRAPARIS.value == "sortiraparis.com"
+    assert Source.FORUM_DES_IMAGES.value == "forumdesimages.fr"
 
 
 def test_extracted_event_requires_core_fields() -> None:

@@ -56,7 +56,10 @@ flowchart TD
 | La Cinémathèque française | 4     | Implemented | Homepage `a.event` → `/seance/` detail pages → text → LLM                                                      |
 | Première Projo            | 3     | Implemented | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM                                 |
 | Forum des images          | 4     | Implemented | `/agenda` cards (cycle, title, director, date) → text → LLM; year-less dates resolved against a reference date |
-| Sortir à Paris            | 4     | Pending     | Editorial articles (+ one JSON-LD block); noisiest, tackled last                                               |
+
+Sortir à Paris was evaluated and **dropped from the MVP** — it is an editorial
+news site with no structured screenings agenda; see
+[ADR 0005](decisions/0005-drop-sortiraparis.md).
 
 ## Worked examples
 
