@@ -3,10 +3,12 @@
 import logging
 import time
 
+import pytest
 from typer.testing import CliRunner
 
 from cine_event_bot.logging_config import get_logger
 from cine_event_bot.main import app, get_greeting
+from cine_event_bot.pipeline import IngestionReport
 
 
 def test_get_greeting_contains_bot_name() -> None:
@@ -20,9 +22,21 @@ def test_get_greeting_returns_non_empty_str() -> None:
 
 def test_greet_command_outputs_greeting() -> None:
     runner = CliRunner()
-    result = runner.invoke(app, [])
+    result = runner.invoke(app, ["greet"])
     assert result.exit_code == 0
     assert "cine-event-bot" in result.output
+
+
+def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_run() -> IngestionReport:
+        return IngestionReport(events_ingested=3, sources_failed=1)
+
+    monkeypatch.setattr("cine_event_bot.main._run_ingestion", fake_run)
+    result = CliRunner().invoke(app, ["scrape"])
+
+    assert result.exit_code == 0
+    assert "3 event(s)" in result.output
+    assert "1 source(s) failed" in result.output
 
 
 def test_get_logger_returns_logger() -> None:

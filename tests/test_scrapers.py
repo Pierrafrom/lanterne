@@ -1,11 +1,16 @@
 """Tests for the scraper architecture and the Cinémathèque scraper."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import Source
-from cine_event_bot.io.scrapers import SCRAPERS, CinemathequeScraper, PendingScraper
-from cine_event_bot.io.scrapers.base import RawListing, SourceScraper
+from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.io.scrapers import (
+    CinemathequeScraper,
+    PendingScraper,
+    build_scrapers,
+)
+from cine_event_bot.io.scrapers.base import SourceScraper
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -14,18 +19,42 @@ def _fixture(name: str) -> str:
     return (_FIXTURES / name).read_text(encoding="utf-8")
 
 
+def _extractor_returning(event: ExtractedEvent) -> MagicMock:
+    extractor = MagicMock()
+    extractor.extract = AsyncMock(return_value=event)
+    return extractor
+
+
+def _sample_extracted() -> ExtractedEvent:
+    return ExtractedEvent(
+        title="Ciao, professore!",
+        event_type=EventType.RETROSPECTIVE,
+        venue="La Cinémathèque française",
+        starts_at=datetime(2026, 6, 25, 18, 30, tzinfo=UTC),
+    )
+
+
+def _response(text: str) -> MagicMock:
+    response = MagicMock()
+    response.text = text
+    response.raise_for_status = MagicMock()
+    return response
+
+
 def test_registry_covers_the_four_sources() -> None:
-    covered = {scraper.source for scraper in SCRAPERS}
+    scrapers = build_scrapers(_extractor_returning(_sample_extracted()))
 
-    assert covered == set(Source)
+    assert {scraper.source for scraper in scrapers} == set(Source)
 
 
-def test_every_registered_scraper_satisfies_the_protocol() -> None:
-    assert all(isinstance(scraper, SourceScraper) for scraper in SCRAPERS)
+def test_every_built_scraper_satisfies_the_protocol() -> None:
+    scrapers = build_scrapers(_extractor_returning(_sample_extracted()))
+
+    assert all(isinstance(scraper, SourceScraper) for scraper in scrapers)
 
 
 def test_parse_index_extracts_detail_urls_in_order() -> None:
-    scraper = CinemathequeScraper()
+    scraper = CinemathequeScraper(_extractor_returning(_sample_extracted()))
 
     urls = scraper.parse_index(_fixture("cinematheque_index.html"))
 
@@ -36,7 +65,7 @@ def test_parse_index_extracts_detail_urls_in_order() -> None:
 
 
 def test_parse_detail_gathers_venue_cycle_date_and_film() -> None:
-    scraper = CinemathequeScraper()
+    scraper = CinemathequeScraper(_extractor_returning(_sample_extracted()))
 
     listing = scraper.parse_detail(
         _fixture("cinematheque_seance.html"),
@@ -51,32 +80,51 @@ def test_parse_detail_gathers_venue_cycle_date_and_film() -> None:
     assert "Ciao, professore!" in listing.raw_text
 
 
-async def test_fetch_listings_walks_index_then_each_detail() -> None:
-    scraper = CinemathequeScraper()
-    index_html = _fixture("cinematheque_index.html")
+async def test_fetch_events_structures_each_listing_into_an_event() -> None:
+    extractor = _extractor_returning(_sample_extracted())
+    scraper = CinemathequeScraper(extractor)
     detail_html = _fixture("cinematheque_seance.html")
-    responses = [_response(index_html), _response(detail_html), _response(detail_html)]
     client = MagicMock()
-    client.get = AsyncMock(side_effect=responses)
+    client.get = AsyncMock(
+        side_effect=[
+            _response(_fixture("cinematheque_index.html")),
+            _response(detail_html),
+            _response(detail_html),
+        ]
+    )
 
-    listings = await scraper.fetch_listings(client)
+    events = await scraper.fetch_events(client)
 
-    assert len(listings) == 2
-    assert all(isinstance(item, RawListing) for item in listings)
-    assert client.get.await_count == 3
+    assert len(events) == 2
+    assert all(isinstance(event, ScreeningEvent) for event in events)
+    assert events[0].source is Source.CINEMATHEQUE
+    assert events[0].title == "Ciao, professore!"
+    assert extractor.extract.await_count == 2
+
+
+async def test_fetch_events_skips_listings_whose_extraction_fails() -> None:
+    extractor = MagicMock()
+    extractor.extract = AsyncMock(side_effect=ValueError("LLM down"))
+    scraper = CinemathequeScraper(extractor)
+    detail_html = _fixture("cinematheque_seance.html")
+    client = MagicMock()
+    client.get = AsyncMock(
+        side_effect=[
+            _response(_fixture("cinematheque_index.html")),
+            _response(detail_html),
+            _response(detail_html),
+        ]
+    )
+
+    events = await scraper.fetch_events(client)
+
+    assert events == []
 
 
 async def test_pending_scraper_yields_nothing() -> None:
     scraper = PendingScraper(Source.PREMIERE_PROJO)
 
-    listings = await scraper.fetch_listings(MagicMock())
+    events = await scraper.fetch_events(MagicMock())
 
-    assert listings == []
+    assert events == []
     assert scraper.source is Source.PREMIERE_PROJO
-
-
-def _response(text: str) -> MagicMock:
-    response = MagicMock()
-    response.text = text
-    response.raise_for_status = MagicMock()
-    return response

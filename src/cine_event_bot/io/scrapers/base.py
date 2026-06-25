@@ -1,10 +1,11 @@
 """Scraper abstractions shared by every source.
 
-A scraper's only job is to turn a source's website into a list of
-:class:`RawListing` — one blob of human-readable text per announced screening.
-Structuring that text into a typed event is the LLM extractor's job (see
-``io/llm.py``), so scrapers stay free of any domain parsing beyond locating and
-concatenating the relevant text.
+A scraper's job is to turn one source's website into a list of
+:class:`ScreeningEvent` ready to persist. *How* it gets there is an internal
+detail: a source serving unstructured text (e.g. cinematheque.fr) runs the text
+through the LLM extractor, while a source already serving structured JSON (e.g.
+the Next.js sources) maps it directly. The pipeline stays agnostic to that
+difference — it only ever calls :meth:`SourceScraper.fetch_events`.
 
 Adding a source means writing one class that satisfies :class:`SourceScraper`
 and registering it (see ``io/scrapers/__init__.py``); nothing else changes.
@@ -15,7 +16,7 @@ from typing import Protocol, runtime_checkable
 
 import httpx
 
-from cine_event_bot.core.models import Source
+from cine_event_bot.core.models import ScreeningEvent, Source
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -24,6 +25,10 @@ logger = get_logger(__name__)
 @dataclass(frozen=True, slots=True)
 class RawListing:
     """One screening announcement as raw text, ready for LLM extraction.
+
+    Used internally by text-based scrapers to carry a screening's text from the
+    parsing step to the LLM extraction step; it is not part of the scraper
+    contract.
 
     Attributes:
         source: The source this listing was scraped from.
@@ -38,21 +43,21 @@ class RawListing:
 
 @runtime_checkable
 class SourceScraper(Protocol):
-    """A source able to yield raw screening listings."""
+    """A source able to yield persistable screening events."""
 
     @property
     def source(self) -> Source:
         """The source this scraper covers."""
         ...
 
-    async def fetch_listings(self, client: httpx.AsyncClient) -> list[RawListing]:
-        """Fetch and parse the source into raw listings.
+    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:
+        """Fetch the source and return its screenings ready to persist.
 
         Args:
             client: Shared async HTTP client used for every request.
 
         Returns:
-            One :class:`RawListing` per announced screening.
+            One unpersisted :class:`ScreeningEvent` per announced screening.
         """
         ...
 
@@ -78,11 +83,11 @@ class PendingScraper:
         """The source this placeholder stands in for."""
         return self._source
 
-    async def fetch_listings(
+    async def fetch_events(
         self,
         client: httpx.AsyncClient,  # noqa: ARG002 — required by SourceScraper protocol
-    ) -> list[RawListing]:
-        """Return no listings and log that the scraper is pending.
+    ) -> list[ScreeningEvent]:
+        """Return no events and log that the scraper is pending.
 
         Args:
             client: Unused; present to satisfy the scraper protocol.
