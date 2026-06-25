@@ -9,6 +9,7 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "httpx[http2]>=0.28.1",
     "instructor>=1.15.3",
+    "openai>=2.44.0",
     "pydantic-settings>=2.14.2",
     "sqlmodel>=0.0.39",
     "typer>=0.26.7",
