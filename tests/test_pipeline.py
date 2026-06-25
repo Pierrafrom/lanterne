@@ -45,6 +45,21 @@ class _FailingScraper:
         raise httpx.ConnectError("boom")
 
 
+class _NullEnricher:
+    async def enrich(self, event: ScreeningEvent) -> None:  # noqa: ARG002
+        return
+
+
+class _StubEnricher:
+    async def enrich(self, event: ScreeningEvent) -> None:
+        event.tmdb_id = 42
+
+
+class _FailingEnricher:
+    async def enrich(self, event: ScreeningEvent) -> None:  # noqa: ARG002
+        raise httpx.ConnectError("tmdb down")
+
+
 async def _count(repository: EventRepository) -> int:
     window = await repository.list_between(
         datetime(2026, 1, 1, tzinfo=UTC), datetime(2027, 1, 1, tzinfo=UTC)
@@ -63,7 +78,7 @@ async def test_run_persists_events_from_every_source(session) -> None:  # noqa: 
             [_event(Source.FORUM_DES_IMAGES, title="B", url="b")],
         ),
     ]
-    pipeline = IngestionPipeline(scrapers, repository)
+    pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
 
     report = await pipeline.run(MagicMock())
 
@@ -84,7 +99,7 @@ async def test_run_deduplicates_same_screening_across_sources(session) -> None: 
             [_event(Source.FORUM_DES_IMAGES, title="Dune", url="b")],
         ),
     ]
-    pipeline = IngestionPipeline(scrapers, repository)
+    pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
 
     report = await pipeline.run(MagicMock())
 
@@ -100,10 +115,43 @@ async def test_run_skips_a_failing_source_without_aborting(session) -> None:  # 
             Source.CINEMATHEQUE, [_event(Source.CINEMATHEQUE, title="A", url="a")]
         ),
     ]
-    pipeline = IngestionPipeline(scrapers, repository)
+    pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
 
     report = await pipeline.run(MagicMock())
 
     assert report.sources_failed == 1
+    assert report.events_ingested == 1
+    assert await _count(repository) == 1
+
+
+async def test_run_enriches_events_before_persisting(session) -> None:  # noqa: ANN001
+    repository = EventRepository(session)
+    scrapers = [
+        _FakeScraper(
+            Source.CINEMATHEQUE, [_event(Source.CINEMATHEQUE, title="A", url="a")]
+        )
+    ]
+    pipeline = IngestionPipeline(scrapers, repository, _StubEnricher())
+
+    await pipeline.run(MagicMock())
+    stored = await repository.get_by_dedup_key(
+        _event(Source.CINEMATHEQUE, title="A", url="a").dedup_key
+    )
+
+    assert stored is not None
+    assert stored.tmdb_id == 42
+
+
+async def test_run_persists_event_even_when_enrichment_fails(session) -> None:  # noqa: ANN001
+    repository = EventRepository(session)
+    scrapers = [
+        _FakeScraper(
+            Source.CINEMATHEQUE, [_event(Source.CINEMATHEQUE, title="A", url="a")]
+        )
+    ]
+    pipeline = IngestionPipeline(scrapers, repository, _FailingEnricher())
+
+    report = await pipeline.run(MagicMock())
+
     assert report.events_ingested == 1
     assert await _count(repository) == 1

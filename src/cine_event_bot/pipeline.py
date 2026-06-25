@@ -1,24 +1,34 @@
-"""Ingestion pipeline: scrape every source and persist deduplicated events.
+"""Ingestion pipeline: scrape, enrich, and persist deduplicated events.
 
-Ties the four building blocks together — scrapers (which already structure
-their source into :class:`ScreeningEvent`, via the LLM or direct mapping) and
-the deduplicating repository. The pipeline itself stays agnostic to how each
-source produces its events; it only iterates scrapers and upserts the result.
+Ties the building blocks together — scrapers (which structure their source into
+:class:`ScreeningEvent`, via the LLM or direct mapping), the TMDB enricher, and
+the deduplicating repository. The pipeline stays agnostic to how each source
+produces its events; it iterates scrapers, enriches each event, then upserts it.
 
 A failing source is logged and skipped so one broken scraper never aborts the
-whole run.
+whole run; a failing enrichment is logged and the event is still persisted.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 import httpx
 
+from cine_event_bot.core.models import ScreeningEvent
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.io.scrapers.base import SourceScraper
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class EventEnricher(Protocol):
+    """Fills a screening's external metadata in place."""
+
+    async def enrich(self, event: ScreeningEvent) -> None:
+        """Enrich an event in place; a no-match leaves it untouched."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,15 +51,18 @@ class IngestionPipeline:
         self,
         scrapers: Sequence[SourceScraper],
         repository: EventRepository,
+        enricher: EventEnricher,
     ) -> None:
-        """Bind the pipeline to its scrapers and persistence repository.
+        """Bind the pipeline to its scrapers, enricher, and repository.
 
         Args:
             scrapers: The source scrapers to run, in order.
             repository: Repository performing the deduplicating upserts.
+            enricher: Enricher filling each event's external metadata.
         """
         self._scrapers = scrapers
         self._repository = repository
+        self._enricher = enricher
 
     async def run(self, client: httpx.AsyncClient) -> IngestionReport:
         """Scrape every source and persist its events, returning a report.
@@ -87,9 +100,20 @@ class IngestionPipeline:
             )
             return None
         for event in events:
+            await self._enrich(event)
             await self._repository.upsert(event)
         logger.info(
             "source ingested",
             extra={"ctx": {"source": scraper.source.value, "events": len(events)}},
         )
         return len(events)
+
+    async def _enrich(self, event: ScreeningEvent) -> None:
+        """Enrich an event, logging and swallowing any enrichment failure."""
+        try:
+            await self._enricher.enrich(event)
+        except Exception:
+            logger.exception(
+                "enrichment failed",
+                extra={"ctx": {"title": event.title, "source": event.source.value}},
+            )
