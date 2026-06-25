@@ -15,6 +15,7 @@ from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.io.scrapers import build_scrapers
+from cine_event_bot.io.tmdb import build_tmdb_enricher
 from cine_event_bot.pipeline import IngestionPipeline, IngestionReport
 
 app = typer.Typer(help="cine-event-bot admin CLI")
@@ -62,7 +63,8 @@ async def _run_ingestion() -> IngestionReport:
             ) as client,
             database.session() as session,
         ):
-            pipeline = IngestionPipeline(scrapers, EventRepository(session))
+            enricher = build_tmdb_enricher(client, settings.tmdb_api_key)
+            pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
             return await pipeline.run(client)
     finally:
         await database.dispose()
