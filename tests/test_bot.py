@@ -1,17 +1,21 @@
-"""Tests for the bot subscription handlers and broadcasting."""
+"""Tests for the bot subscription, question, and broadcasting handlers."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.qa import QueryCriteria
 from cine_event_bot.io.bot import (
     broadcast,
     build_dispatcher,
+    handle_question,
     handle_subscribe,
     handle_unsubscribe,
 )
 from cine_event_bot.io.db import Database
-from cine_event_bot.io.repository import SubscriberRepository
+from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 
 
 async def test_handle_subscribe_records_and_confirms(session: AsyncSession) -> None:
@@ -52,9 +56,37 @@ async def test_broadcast_skips_failed_sends() -> None:
     assert sent == 2
 
 
+async def test_handle_question_interprets_searches_and_formats(
+    session: AsyncSession,
+) -> None:
+    repository = EventRepository(session)
+    await repository.add(
+        ScreeningEvent(
+            dedup_key="k",
+            title="Le Voyage de Chihiro",
+            event_type=EventType.RETROSPECTIVE,
+            venue="La Cinémathèque française",
+            starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+            source=Source.CINEMATHEQUE,
+        )
+    )
+    interpreter = MagicMock()
+    interpreter.interpret = AsyncMock(return_value=QueryCriteria(text_query="chihiro"))
+
+    answer = await handle_question(
+        "Y a-t-il du Miyazaki ?",
+        interpreter,
+        repository,
+        datetime(2026, 6, 25, tzinfo=UTC),
+    )
+
+    assert "Le Voyage de Chihiro" in answer
+    interpreter.interpret.assert_awaited_once()
+
+
 def test_build_dispatcher_returns_a_dispatcher() -> None:
     database = Database("sqlite+aiosqlite:///:memory:")
 
-    dispatcher = build_dispatcher(database)
+    dispatcher = build_dispatcher(database, MagicMock())
 
     assert dispatcher is not None

@@ -16,7 +16,7 @@ from cine_event_bot.config import Settings
 from cine_event_bot.core.digest import build_digest
 from cine_event_bot.io.bot import broadcast, build_dispatcher
 from cine_event_bot.io.db import Database
-from cine_event_bot.io.llm import build_extractor
+from cine_event_bot.io.llm import build_extractor, build_interpreter
 from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 from cine_event_bot.io.scrapers import build_scrapers
 from cine_event_bot.io.tmdb import build_tmdb_enricher
@@ -114,7 +114,7 @@ async def _run_bot() -> None:
     database = Database(settings.database_url)
     await database.create_tables()
     bot = Bot(settings.telegram_bot_token)
-    dispatcher = build_dispatcher(database)
+    dispatcher = build_dispatcher(database, build_interpreter(settings))
     try:
         await dispatcher.start_polling(bot)
     finally:

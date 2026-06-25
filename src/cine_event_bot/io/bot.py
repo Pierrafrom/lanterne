@@ -10,13 +10,16 @@ project ``CLAUDE.md``).
 """
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
+from cine_event_bot.core.qa import format_qa_answer
 from cine_event_bot.io.db import Database
-from cine_event_bot.io.repository import SubscriberRepository
+from cine_event_bot.io.llm import QuestionInterpreter
+from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -56,6 +59,31 @@ async def handle_unsubscribe(chat_id: int, repository: SubscriberRepository) -> 
     return _UNSUBSCRIBED
 
 
+async def handle_question(
+    question: str,
+    interpreter: QuestionInterpreter,
+    repository: EventRepository,
+    reference_date: datetime,
+) -> str:
+    """Answer a natural-language question about programmed screenings.
+
+    The question is parsed into a structured filter by the LLM, run against the
+    repository, and the matches are rendered as a French answer.
+
+    Args:
+        question: The user's natural-language question.
+        interpreter: LLM-backed interpreter producing the query filter.
+        repository: Event repository the filter is run against.
+        reference_date: Instant relative time phrases are resolved against.
+
+    Returns:
+        The French answer to send back.
+    """
+    criteria = await interpreter.interpret(question, reference_date.date())
+    events = await repository.search(criteria)
+    return format_qa_answer(events)
+
+
 async def broadcast(bot: Bot, chat_ids: Sequence[int], text: str) -> int:
     """Send a message to every chat, skipping (and logging) failed sends.
 
@@ -78,14 +106,20 @@ async def broadcast(bot: Bot, chat_ids: Sequence[int], text: str) -> int:
     return sent
 
 
-def build_dispatcher(database: Database) -> Dispatcher:
-    """Build the aiogram dispatcher wired to the subscription handlers.
+def build_dispatcher(
+    database: Database, interpreter: QuestionInterpreter
+) -> Dispatcher:
+    """Build the aiogram dispatcher wired to every handler.
+
+    ``/start`` and ``/stop`` manage the digest subscription; any other text
+    message is treated as a question and answered via the interpreter.
 
     Args:
         database: Database used to open a session per incoming update.
+        interpreter: LLM-backed interpreter for natural-language questions.
 
     Returns:
-        A dispatcher handling ``/start`` and ``/stop``.
+        A dispatcher handling ``/start``, ``/stop``, and free-text questions.
     """
     router = Router()
 
@@ -102,6 +136,19 @@ def build_dispatcher(database: Database) -> Dispatcher:
         async with database.session() as session:
             reply = await handle_unsubscribe(
                 message.chat.id, SubscriberRepository(session)
+            )
+        await message.answer(reply)
+
+    @router.message()
+    async def on_question(message: Message) -> None:
+        if not message.text:
+            return
+        async with database.session() as session:
+            reply = await handle_question(
+                message.text,
+                interpreter,
+                EventRepository(session),
+                datetime.now(UTC),
             )
         await message.answer(reply)
 

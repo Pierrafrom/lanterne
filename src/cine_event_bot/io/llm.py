@@ -1,16 +1,20 @@
-"""Structured event extraction from scraped text via an LLM.
+"""Structured LLM tasks over Ollama: event extraction and question parsing.
 
-Turns the free-text announcement of a single screening (already isolated by a
-scraper) into a validated :class:`ExtractedEvent`. The LLM is reached through
-Instructor over Ollama's OpenAI-compatible endpoint, using JSON mode since that
-endpoint does not reliably support tool/function calling.
+Both turn free text into a validated Pydantic model through Instructor over
+Ollama's OpenAI-compatible endpoint, using JSON mode since that endpoint does
+not reliably support tool/function calling. :class:`EventExtractor` structures a
+scraped announcement into an :class:`ExtractedEvent`; :class:`QuestionInterpreter`
+turns a user's natural-language question into a :class:`QueryCriteria`.
 """
+
+from datetime import date
 
 import instructor
 from openai import AsyncOpenAI
 
 from cine_event_bot.config import Settings
 from cine_event_bot.core.models import ExtractedEvent
+from cine_event_bot.core.qa import QueryCriteria
 
 _SYSTEM_PROMPT = (
     "You extract structured data about a single special cinema screening in "
@@ -63,6 +67,61 @@ class EventExtractor:
         )
 
 
+_QA_SYSTEM_PROMPT = (
+    "You translate a user's French question about upcoming special cinema "
+    "screenings into a structured filter. Leave a field null when the question "
+    "does not constrain it. text_query holds film/director/keyword terms to "
+    "match (or null for a broad question). event_type is one of avant_premiere, "
+    "cine_concert, retrospective, open_air, or null. Set team_only to true only "
+    "if the user asks for screenings with the film team present. Resolve "
+    'relative time phrases ("this weekend", "soon", "tonight") into '
+    "absolute UTC starts_after/starts_before bounds using the reference date "
+    "given in the message."
+)
+
+
+class QuestionInterpreter:
+    """Turns a natural-language question into a :class:`QueryCriteria`."""
+
+    def __init__(self, client: instructor.AsyncInstructor, model: str) -> None:
+        """Bind the interpreter to an instructor client and target model.
+
+        Args:
+            client: Async Instructor client wrapping the LLM endpoint.
+            model: Name of the model to query (e.g. ``llama3.2``).
+        """
+        self._client = client
+        self._model = model
+
+    async def interpret(self, question: str, reference_date: date) -> QueryCriteria:
+        """Parse a question into a structured query filter.
+
+        Args:
+            question: The user's natural-language question.
+            reference_date: Date relative phrases are resolved against.
+
+        Returns:
+            The structured filter to run against the repository.
+        """
+        content = f"Reference date: {reference_date.isoformat()}\nQuestion: {question}"
+        return await self._client.chat.completions.create(
+            model=self._model,
+            response_model=QueryCriteria,
+            messages=[
+                {"role": "system", "content": _QA_SYSTEM_PROMPT},
+                {"role": "user", "content": content},
+            ],
+        )
+
+
+def _build_instructor(settings: Settings) -> instructor.AsyncInstructor:
+    """Build the async Instructor client for the configured Ollama endpoint."""
+    return instructor.from_openai(
+        AsyncOpenAI(base_url=f"{settings.ollama_base_url}/v1", api_key="ollama"),
+        mode=instructor.Mode.JSON,
+    )
+
+
 def build_extractor(settings: Settings) -> EventExtractor:
     """Build an extractor wired to the Ollama endpoint from settings.
 
@@ -72,8 +131,16 @@ def build_extractor(settings: Settings) -> EventExtractor:
     Returns:
         An :class:`EventExtractor` ready to query the configured model.
     """
-    client = instructor.from_openai(
-        AsyncOpenAI(base_url=f"{settings.ollama_base_url}/v1", api_key="ollama"),
-        mode=instructor.Mode.JSON,
-    )
-    return EventExtractor(client, settings.ollama_model)
+    return EventExtractor(_build_instructor(settings), settings.ollama_model)
+
+
+def build_interpreter(settings: Settings) -> QuestionInterpreter:
+    """Build a question interpreter wired to the Ollama endpoint from settings.
+
+    Args:
+        settings: Application settings holding the Ollama URL and model name.
+
+    Returns:
+        A :class:`QuestionInterpreter` ready to query the configured model.
+    """
+    return QuestionInterpreter(_build_instructor(settings), settings.ollama_model)
