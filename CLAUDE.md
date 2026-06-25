@@ -56,11 +56,23 @@ See `.env.example` for the full list. Required to run:
 - `TMDB_API_KEY` — from themoviedb.org
 - `OLLAMA_BASE_URL` + `OLLAMA_MODEL` — local or remote Ollama instance
 
+## Language of user-facing strings
+
+Code, identifiers, comments, docstrings, logs and docs are in English (global
+rule). The **exception** is end-user-facing Telegram text — bot replies
+(`/start`, `/stop`) and the weekly digest — which is in **French**, since the
+bot targets a French-speaking Parisian audience. Digest times are shown in
+Paris local time (events are stored in UTC).
+
 ## Running locally
 
 ```fish
 uv sync --all-groups
-cp .env.example .env  # fill in the required tokens
-uv run python -m cine_event_bot  # start the bot
-uv run pytest         # run tests
+cp .env.example .env   # fill in the required tokens
+uv run pytest          # run tests
+
+# Admin CLI (Typer) — see `uv run python -m cine_event_bot --help`
+uv run python -m cine_event_bot scrape          # scrape + enrich + persist
+uv run python -m cine_event_bot weekly-digest   # broadcast the week's digest
+uv run python -m cine_event_bot run-bot         # start the Telegram bot
 ```

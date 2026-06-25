@@ -6,14 +6,18 @@ while the internals remain fully async.
 """
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import typer
+from aiogram import Bot
 
 from cine_event_bot.config import Settings
+from cine_event_bot.core.digest import build_digest
+from cine_event_bot.io.bot import broadcast, build_dispatcher
 from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor
-from cine_event_bot.io.repository import EventRepository
+from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 from cine_event_bot.io.scrapers import build_scrapers
 from cine_event_bot.io.tmdb import build_tmdb_enricher
 from cine_event_bot.pipeline import IngestionPipeline, IngestionReport
@@ -21,6 +25,7 @@ from cine_event_bot.pipeline import IngestionPipeline, IngestionReport
 app = typer.Typer(help="cine-event-bot admin CLI")
 
 _HTTP_TIMEOUT_SECONDS = 30.0
+_DIGEST_WINDOW = timedelta(days=7)
 
 
 def get_greeting() -> str:
@@ -67,6 +72,53 @@ async def _run_ingestion() -> IngestionReport:
             pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
             return await pipeline.run(client)
     finally:
+        await database.dispose()
+
+
+@app.command(name="weekly-digest")
+def weekly_digest() -> None:
+    """Send the upcoming week's digest to every active subscriber."""
+    sent = asyncio.run(_run_weekly_digest())
+    typer.echo(f"Digest sent to {sent} subscriber(s).")
+
+
+async def _run_weekly_digest() -> int:
+    """Build the next-7-days digest and broadcast it to active subscribers."""
+    settings = Settings()
+    database = Database(settings.database_url)
+    await database.create_tables()
+    now = datetime.now(UTC)
+    bot = Bot(settings.telegram_bot_token)
+    try:
+        async with database.session() as session:
+            events = await EventRepository(session).list_between(
+                now, now + _DIGEST_WINDOW
+            )
+            subscribers = await SubscriberRepository(session).list_active()
+        chat_ids = [subscriber.chat_id for subscriber in subscribers]
+        return await broadcast(bot, chat_ids, build_digest(events))
+    finally:
+        await bot.session.close()
+        await database.dispose()
+
+
+@app.command(name="run-bot")
+def run_bot() -> None:
+    """Start the Telegram bot, handling /start and /stop subscriptions."""
+    asyncio.run(_run_bot())
+
+
+async def _run_bot() -> None:
+    """Wire the database and dispatcher, then poll Telegram until stopped."""
+    settings = Settings()
+    database = Database(settings.database_url)
+    await database.create_tables()
+    bot = Bot(settings.telegram_bot_token)
+    dispatcher = build_dispatcher(database)
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        await bot.session.close()
         await database.dispose()
 
 

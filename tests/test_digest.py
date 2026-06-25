@@ -1,0 +1,81 @@
+"""Tests for the weekly digest formatting (pure, French user-facing text)."""
+
+from datetime import UTC, datetime
+
+from cine_event_bot.core.digest import build_digest
+from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+
+
+def _event(
+    *,
+    title: str,
+    starts_at: datetime,
+    has_team_present: bool = False,
+    release_year: int | None = None,
+    venue: str = "Le Grand Rex",
+) -> ScreeningEvent:
+    return ScreeningEvent(
+        dedup_key=f"{title}-{starts_at.isoformat()}",
+        title=title,
+        event_type=EventType.AVANT_PREMIERE,
+        venue=venue,
+        starts_at=starts_at,
+        has_team_present=has_team_present,
+        release_year=release_year,
+        source=Source.PREMIERE_PROJO,
+    )
+
+
+def test_build_digest_without_events_is_explicit() -> None:
+    message = build_digest([])
+
+    assert "Aucune séance" in message
+
+
+def test_build_digest_lists_title_venue_and_paris_time() -> None:
+    # 18:30 UTC in July = 20h30 Paris (UTC+2).
+    event = _event(
+        title="Dune",
+        starts_at=datetime(2026, 7, 7, 18, 30, tzinfo=UTC),
+        venue="Le Grand Rex",
+    )
+
+    message = build_digest([event])
+
+    assert "Dune" in message
+    assert "Le Grand Rex" in message
+    assert "20h30" in message
+    assert "mardi 7 juillet" in message.lower()
+
+
+def test_build_digest_flags_team_presence_and_release_year() -> None:
+    event = _event(
+        title="Soudain",
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+        has_team_present=True,
+        release_year=2024,
+    )
+
+    message = build_digest([event])
+
+    assert "(2024)" in message
+    assert "équipe" in message
+
+
+def test_build_digest_groups_by_day_in_chronological_order() -> None:
+    later = _event(title="Later", starts_at=datetime(2026, 7, 9, 17, 0, tzinfo=UTC))
+    earlier = _event(title="Earlier", starts_at=datetime(2026, 7, 7, 17, 0, tzinfo=UTC))
+
+    message = build_digest([later, earlier])
+
+    assert message.index("Earlier") < message.index("Later")
+    assert message.index("7 juillet") < message.index("9 juillet")
+
+
+def test_build_digest_handles_round_hour_without_minutes() -> None:
+    event = _event(title="Film", starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC))
+
+    message = build_digest([event])
+
+    assert "20h" in message
+    assert "20h00" not in message
