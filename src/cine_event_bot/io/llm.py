@@ -20,7 +20,9 @@ _SYSTEM_PROMPT = (
     "retrospective (heritage/repertory cycle), open_air (outdoor screening). "
     "Set has_team_present to true only when the text states that the director "
     "or cast attend. Parse the screening date and time into an absolute UTC "
-    "datetime. Use the exact venue name as written."
+    "datetime; if the text gives a day and month without a year, use the "
+    "reference date stated in the text to pick the next upcoming occurrence. "
+    "Use the exact venue name as written."
 )
 
 

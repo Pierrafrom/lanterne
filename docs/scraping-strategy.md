@@ -51,12 +51,12 @@ flowchart TD
 
 ## Current source classification
 
-| Source                    | Level | Status      | Notes                                                                          |
-| ------------------------- | ----- | ----------- | ------------------------------------------------------------------------------ |
-| La Cinémathèque française | 4     | Implemented | Homepage `a.event` → `/seance/` detail pages → text → LLM                      |
-| Première Projo            | 3     | Implemented | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM |
-| Forum des images          | 4     | Pending     | Classic HTML; mirrors the Cinémathèque text+LLM pattern                        |
-| Sortir à Paris            | 4     | Pending     | Editorial articles (+ one JSON-LD block); noisiest, tackled last               |
+| Source                    | Level | Status      | Notes                                                                                                          |
+| ------------------------- | ----- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| La Cinémathèque française | 4     | Implemented | Homepage `a.event` → `/seance/` detail pages → text → LLM                                                      |
+| Première Projo            | 3     | Implemented | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM                                 |
+| Forum des images          | 4     | Implemented | `/agenda` cards (cycle, title, director, date) → text → LLM; year-less dates resolved against a reference date |
+| Sortir à Paris            | 4     | Pending     | Editorial articles (+ one JSON-LD block); noisiest, tackled last                                               |
 
 ## Worked examples
 

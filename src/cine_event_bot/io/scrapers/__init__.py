@@ -14,6 +14,7 @@ from cine_event_bot.io.scrapers.base import (
     SourceScraper,
 )
 from cine_event_bot.io.scrapers.cinematheque import CinemathequeScraper
+from cine_event_bot.io.scrapers.forumdesimages import ForumDesImagesScraper
 from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
 
 
@@ -32,13 +33,14 @@ def build_scrapers(extractor: EventExtractor) -> list[SourceScraper]:
     return [
         CinemathequeScraper(extractor),
         PremiereProjoScraper(),
+        ForumDesImagesScraper(extractor),
         PendingScraper(Source.SORTIRAPARIS),
-        PendingScraper(Source.FORUM_DES_IMAGES),
     ]
 
 
 __all__ = [
     "CinemathequeScraper",
+    "ForumDesImagesScraper",
     "PendingScraper",
     "PremiereProjoScraper",
     "RawListing",

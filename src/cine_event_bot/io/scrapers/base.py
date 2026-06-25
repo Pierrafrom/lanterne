@@ -17,6 +17,7 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from cine_event_bot.core.models import ScreeningEvent, Source
+from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +40,34 @@ class RawListing:
     source: Source
     source_url: str
     raw_text: str
+
+
+async def structure_via_llm(
+    extractor: EventExtractor, listing: RawListing
+) -> ScreeningEvent | None:
+    """Structure one raw listing into an event via the LLM.
+
+    Shared by every text-based scraper: a listing whose extraction fails is
+    logged and skipped (returns None) so one bad listing never aborts a run.
+
+    Args:
+        extractor: LLM-backed extractor turning listing text into events.
+        listing: The raw listing to structure.
+
+    Returns:
+        The structured :class:`ScreeningEvent`, or None when extraction failed.
+    """
+    try:
+        extracted = await extractor.extract(listing.raw_text)
+    except Exception:
+        logger.exception(
+            "llm extraction failed",
+            extra={"ctx": {"source": listing.source.value, "url": listing.source_url}},
+        )
+        return None
+    return ScreeningEvent.from_extracted(
+        extracted, source=listing.source, source_url=listing.source_url
+    )
 
 
 @runtime_checkable
