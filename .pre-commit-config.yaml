@@ -1,0 +1,27 @@
+# Run `pre-commit autoupdate` right after copying this file to pin the
+# current hook versions — don't trust hardcoded revs in a template, they go
+# stale silently.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20  # placeholder — run `pre-commit autoupdate`
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0  # placeholder — run `pre-commit autoupdate`
+    hooks:
+      - id: mdformat
+        additional_dependencies: [mdformat-gfm]
+
+  # Local hook: runs mypy in the project's real synced environment via `uv run`
+  # rather than pre-commit's isolated venv (which misses third-party type stubs).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src
+        language: system
+        pass_filenames: false
+        types: [python]
