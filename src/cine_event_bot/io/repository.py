@@ -38,6 +38,35 @@ class EventRepository:
         await self._session.refresh(event)
         return event
 
+    async def upsert(self, event: ScreeningEvent) -> ScreeningEvent:
+        """Insert an event, or merge it into the existing one on key collision.
+
+        Implements the cross-source deduplication strategy (see
+        ``docs/decisions/0002-dedup-merge-strategy.md``): the first source to
+        report a screening owns its provenance and identity; later sources only
+        enrich it. Specifically, on collision the stored row keeps its ``id``,
+        ``source``, ``source_url`` and any TMDB enrichment, while
+        ``has_team_present`` becomes the logical OR of both reports and a
+        missing ``description`` is backfilled from the newcomer.
+
+        Args:
+            event: The freshly built event to insert or merge.
+
+        Returns:
+            The persisted event — newly inserted or the enriched existing row.
+        """
+        existing = await self.get_by_dedup_key(event.dedup_key)
+        if existing is None:
+            return await self.add(event)
+
+        existing.has_team_present = existing.has_team_present or event.has_team_present
+        if existing.description is None:
+            existing.description = event.description
+        self._session.add(existing)
+        await self._session.commit()
+        await self._session.refresh(existing)
+        return existing
+
     async def get_by_dedup_key(self, dedup_key: str) -> ScreeningEvent | None:
         """Return the event matching a deduplication key, if any.
 
