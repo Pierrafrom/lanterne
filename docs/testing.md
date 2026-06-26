@@ -1,0 +1,56 @@
+# Testing
+
+## Running the suite
+
+```fish
+uv run pytest                       # full suite + coverage (fails under 80%)
+uv run pytest tests/test_qa.py      # one file
+uv run pytest -k dedup              # tests matching a keyword
+uv run pytest tests/test_qa.py::test_format_qa_answer_without_events
+```
+
+Coverage is enforced at **80%** project-wide (`--cov-fail-under=80` in
+`pyproject.toml`); the suite currently sits around 90%+. The uncovered remainder
+is the composition roots in `main.py` (real network/Telegram/Ollama wiring),
+which are validated manually rather than unit-tested.
+
+## Conventions
+
+- **Async tests** run under `pytest-asyncio` in `auto` mode — just write
+  `async def test_...`; no decorator needed.
+- **No network in tests.** External I/O is always mocked or faked:
+  - the **database** uses a real in-memory SQLite via the shared `database` /
+    `session` fixtures in `tests/conftest.py` (a `StaticPool` keeps the schema
+    across sessions);
+  - **HTTP** (scrapers, TMDB) uses `MagicMock` clients with `AsyncMock` `.get`;
+  - the **LLM** (Instructor) and the **Telegram bot** are mocked.
+- **Scraper parsing** is tested against committed, trimmed real-markup fixtures
+  in `tests/fixtures/` (`cinematheque_*.html`, `forumdesimages_agenda.html`,
+  `premiereprojo_home.html`). A site redesign breaks the parse test — the
+  intended early-warning signal (see [scraping-strategy.md](scraping-strategy.md)).
+- **One behaviour per test**, named `test_<behaviour>_<condition>`.
+
+## What is tested where
+
+| Area                               | Tests                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                     |
+| Persistence, dedup upsert, search  | `test_db.py`, `test_repository.py`, `test_upsert.py`                  |
+| Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py` |
+| LLM extractor                      | `test_llm.py`                                                         |
+| TMDB enrichment                    | `test_tmdb.py`                                                        |
+| Ingestion pipeline                 | `test_pipeline.py`                                                    |
+| Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                        |
+| Bot handlers & broadcast           | `test_bot.py`                                                         |
+| CLI & JSONL logging                | `test_main.py`                                                        |
+
+## Quality gates (run before every commit)
+
+The pre-commit hook runs them automatically; to run by hand:
+
+```fish
+uv run ruff check .       # lint — must be empty (zero warnings)
+uv run ruff format .      # formatting
+uv run mypy src           # strict type checking
+uv run pytest             # tests + coverage
+```
