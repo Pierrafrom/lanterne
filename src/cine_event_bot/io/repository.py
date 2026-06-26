@@ -7,10 +7,14 @@ its write operations, so callers work in terms of domain intent
 
 from datetime import UTC, datetime
 
+from sqlalchemy import or_
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from cine_event_bot.core.models import ScreeningEvent, Subscriber
+from cine_event_bot.core.qa import QueryCriteria
+
+_SEARCH_LIMIT = 20
 
 
 class EventRepository:
@@ -97,6 +101,47 @@ class EventRepository:
             .where(col(ScreeningEvent.starts_at) >= start)
             .where(col(ScreeningEvent.starts_at) < end)
             .order_by(col(ScreeningEvent.starts_at))
+        )
+        result = await self._session.exec(statement)
+        return list(result.all())
+
+    async def search(self, criteria: QueryCriteria) -> list[ScreeningEvent]:
+        """Return events matching a structured query, soonest first.
+
+        Each set criterion narrows the result; an unset criterion imposes no
+        constraint. Text matches the title or synopsis case-insensitively.
+
+        Args:
+            criteria: The structured filter to apply.
+
+        Returns:
+            Matching events ordered by ascending start time, capped in size.
+        """
+        statement = select(ScreeningEvent)
+        if criteria.event_type is not None:
+            statement = statement.where(
+                ScreeningEvent.event_type == criteria.event_type
+            )
+        if criteria.team_only:
+            statement = statement.where(col(ScreeningEvent.has_team_present).is_(True))
+        if criteria.starts_after is not None:
+            statement = statement.where(
+                col(ScreeningEvent.starts_at) >= criteria.starts_after
+            )
+        if criteria.starts_before is not None:
+            statement = statement.where(
+                col(ScreeningEvent.starts_at) < criteria.starts_before
+            )
+        if criteria.text_query:
+            pattern = f"%{criteria.text_query}%"
+            statement = statement.where(
+                or_(
+                    col(ScreeningEvent.title).ilike(pattern),
+                    col(ScreeningEvent.overview).ilike(pattern),
+                )
+            )
+        statement = statement.order_by(col(ScreeningEvent.starts_at)).limit(
+            _SEARCH_LIMIT
         )
         result = await self._session.exec(statement)
         return list(result.all())
