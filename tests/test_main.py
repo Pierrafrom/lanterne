@@ -1,12 +1,13 @@
 """Tests for the admin CLI entry point and logging infrastructure."""
 
+import json
 import logging
 import time
 
 import pytest
 from typer.testing import CliRunner
 
-from cine_event_bot.logging_config import get_logger
+from cine_event_bot.logging_config import JsonlFormatter, get_logger
 from cine_event_bot.main import app, get_greeting
 from cine_event_bot.pipeline import IngestionReport
 
@@ -54,3 +55,40 @@ def test_logger_emits_without_error() -> None:
     unique = f"test.emit.{time.monotonic_ns()}"
     logger = get_logger(unique)
     logger.info("scaffold smoke test", extra={"ctx": {"stage": "init"}})
+
+
+def test_jsonl_formatter_includes_exception_traceback() -> None:
+    record = logging.LogRecord(
+        name="test.exc",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="boom",
+        args=(),
+        exc_info=None,
+    )
+    try:
+        raise ValueError("kaboom")
+    except ValueError:
+        import sys
+
+        record.exc_info = sys.exc_info()
+    payload = json.loads(JsonlFormatter().format(record))
+
+    assert payload["msg"] == "boom"
+    assert "kaboom" in payload["exc"]
+
+
+def test_jsonl_formatter_omits_exc_without_exception() -> None:
+    record = logging.LogRecord(
+        name="test.noexc",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="ok",
+        args=(),
+        exc_info=None,
+    )
+    payload = json.loads(JsonlFormatter().format(record))
+
+    assert "exc" not in payload

@@ -35,15 +35,19 @@ class JsonlFormatter(logging.Formatter):
             record: The log record to format.
 
         Returns:
-            A JSON string with fixed fields ts, level, module, msg, ctx.
+            A JSON string with fixed fields ts, level, module, msg, ctx, and an
+            ``exc`` field carrying the traceback when one is attached (e.g. from
+            ``logger.exception``).
         """
-        payload = {
+        payload: dict[str, object] = {
             "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "module": record.name,
             "msg": record.getMessage(),
             "ctx": getattr(record, "ctx", {}),
         }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
