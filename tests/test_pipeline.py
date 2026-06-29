@@ -142,6 +142,46 @@ async def test_run_enriches_events_before_persisting(session) -> None:  # noqa: 
     assert stored.tmdb_id == 42
 
 
+async def test_run_reports_progress_per_source(session) -> None:  # noqa: ANN001
+    repository = EventRepository(session)
+    scrapers = [
+        _FailingScraper(Source.PREMIERE_PROJO),
+        _FakeScraper(
+            Source.CINEMATHEQUE,
+            [
+                _event(Source.CINEMATHEQUE, title="A", url="a"),
+                _event(Source.CINEMATHEQUE, title="B", url="b"),
+            ],
+        ),
+    ]
+    events: list[tuple[str, object]] = []
+
+    class _RecordingReporter:
+        def source_started(self, source: str) -> None:
+            events.append(("started", source))
+
+        def events_fetched(self, source: str, total: int) -> None:  # noqa: ARG002
+            events.append(("fetched", total))
+
+        def event_processed(self, source: str) -> None:
+            events.append(("processed", source))
+
+        def source_finished(self, source: str, count: int) -> None:  # noqa: ARG002
+            events.append(("finished", count))
+
+        def source_failed(self, source: str) -> None:
+            events.append(("failed", source))
+
+    await IngestionPipeline(scrapers, repository, _NullEnricher()).run(
+        MagicMock(), _RecordingReporter()
+    )
+
+    assert ("failed", "premiereprojo.fr") in events
+    assert ("fetched", 2) in events
+    assert events.count(("processed", "cinematheque.fr")) == 2
+    assert ("finished", 2) in events
+
+
 async def test_run_persists_event_even_when_enrichment_fails(session) -> None:  # noqa: ANN001
     repository = EventRepository(session)
     scrapers = [

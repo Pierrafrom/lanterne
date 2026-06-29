@@ -31,6 +31,52 @@ class EventEnricher(Protocol):
         ...
 
 
+class ProgressReporter(Protocol):
+    """Receives ingestion progress events for live display.
+
+    All methods are best-effort UI hooks; implementations must not raise.
+    """
+
+    def source_started(self, source: str) -> None:
+        """A source's scrape has begun."""
+        ...
+
+    def events_fetched(self, source: str, total: int) -> None:
+        """The source returned ``total`` events to enrich and persist."""
+        ...
+
+    def event_processed(self, source: str) -> None:
+        """One event of the current source has been enriched and persisted."""
+        ...
+
+    def source_finished(self, source: str, count: int) -> None:
+        """The source finished with ``count`` events ingested."""
+        ...
+
+    def source_failed(self, source: str) -> None:
+        """The source's scrape raised and was skipped."""
+        ...
+
+
+class NullReporter:
+    """A :class:`ProgressReporter` that ignores every event (default)."""
+
+    def source_started(self, source: str) -> None:  # noqa: ARG002, D102
+        return
+
+    def events_fetched(self, source: str, total: int) -> None:  # noqa: ARG002, D102
+        return
+
+    def event_processed(self, source: str) -> None:  # noqa: ARG002, D102
+        return
+
+    def source_finished(self, source: str, count: int) -> None:  # noqa: ARG002, D102
+        return
+
+    def source_failed(self, source: str) -> None:  # noqa: ARG002, D102
+        return
+
+
 @dataclass(frozen=True, slots=True)
 class IngestionReport:
     """Outcome of one ingestion run.
@@ -64,19 +110,26 @@ class IngestionPipeline:
         self._repository = repository
         self._enricher = enricher
 
-    async def run(self, client: httpx.AsyncClient) -> IngestionReport:
+    async def run(
+        self,
+        client: httpx.AsyncClient,
+        reporter: ProgressReporter | None = None,
+    ) -> IngestionReport:
         """Scrape every source and persist its events, returning a report.
 
         Args:
             client: Shared async HTTP client passed to each scraper.
+            reporter: Optional progress reporter for live display; defaults to a
+                no-op reporter.
 
         Returns:
             An :class:`IngestionReport` summarising the run.
         """
+        active = reporter if reporter is not None else NullReporter()
         ingested = 0
         failed = 0
         for scraper in self._scrapers:
-            count = await self._ingest_source(scraper, client)
+            count = await self._ingest_source(scraper, client, active)
             if count is None:
                 failed += 1
             else:
@@ -88,24 +141,30 @@ class IngestionPipeline:
         return IngestionReport(events_ingested=ingested, sources_failed=failed)
 
     async def _ingest_source(
-        self, scraper: SourceScraper, client: httpx.AsyncClient
+        self,
+        scraper: SourceScraper,
+        client: httpx.AsyncClient,
+        reporter: ProgressReporter,
     ) -> int | None:
         """Ingest one source; return its event count, or None on failure."""
+        source = scraper.source.value
+        reporter.source_started(source)
         try:
             events = await scraper.fetch_events(client)
         except Exception:
-            logger.exception(
-                "source scrape failed",
-                extra={"ctx": {"source": scraper.source.value}},
-            )
+            logger.exception("source scrape failed", extra={"ctx": {"source": source}})
+            reporter.source_failed(source)
             return None
+        reporter.events_fetched(source, len(events))
         for event in events:
             await self._enrich(event)
             await self._repository.upsert(event)
+            reporter.event_processed(source)
         logger.info(
             "source ingested",
-            extra={"ctx": {"source": scraper.source.value, "events": len(events)}},
+            extra={"ctx": {"source": source, "events": len(events)}},
         )
+        reporter.source_finished(source, len(events))
         return len(events)
 
     async def _enrich(self, event: ScreeningEvent) -> None:

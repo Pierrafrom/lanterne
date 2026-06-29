@@ -79,3 +79,15 @@ def test_build_digest_handles_round_hour_without_minutes() -> None:
 
     assert "20h" in message
     assert "20h00" not in message
+
+
+def test_build_digest_treats_naive_datetime_as_utc() -> None:
+    # SQLite hands datetimes back without tzinfo; they must be read as UTC.
+    naive = datetime(2026, 7, 7, 18, 0)  # noqa: DTZ001 — simulating a SQLite read
+    event = _event(title="Film", starts_at=naive)
+
+    message = build_digest([event])
+
+    # 18:00 UTC -> 20h Paris (summer, UTC+2), not the server's local zone.
+    assert "20h" in message
+    assert "mardi 7 juillet" in message.lower()

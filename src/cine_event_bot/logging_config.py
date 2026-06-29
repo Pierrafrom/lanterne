@@ -1,25 +1,34 @@
-"""JSONL logging configuration for cine-event-bot.
+"""Logging configuration for cine-event-bot.
+
+Two sinks per log event:
+
+- a **JSONL file** (``logs/app.jsonl``) — machine/AI-friendly, one JSON object
+  per line, for cheap ``grep``/``jq`` debugging;
+- a **human-readable console** stream via Rich — colored, with the structured
+  ``ctx`` rendered as ``key=value`` pairs, so a developer can follow what the
+  bot is doing live.
 
 Usage in application code::
 
     from cine_event_bot.logging_config import get_logger
     logger = get_logger(__name__)
     logger.error("scraping failed", extra={"ctx": {"source": "mk2.fr", "url": "..."}})
-
-Output format (one JSON line per event)::
-
-    {"ts": "...", "level": "ERROR", "module": "...", "msg": "...", "ctx": {...}}
 """
 
 import json
 import logging
 import os
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from rich.console import Console
+from rich.logging import RichHandler
+
 LOG_DIR = Path("logs")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+
+# Shared console so Rich log lines and progress bars coexist without clobbering.
+console = Console()
 
 
 class JsonlFormatter(logging.Formatter):
@@ -51,16 +60,41 @@ class JsonlFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-def get_logger(name: str) -> logging.Logger:
-    """Return a configured logger: JSONL file + stdout, level via LOG_LEVEL env var.
+class ConsoleFormatter(logging.Formatter):
+    """Renders a record as ``message (key=value, ...)`` for the console.
 
-    Idempotent — returns the same logger if called multiple times with the same name.
+    The structured ``ctx`` is appended as readable key=value pairs; Rich adds
+    the timestamp, level, and color around it.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Append the ``ctx`` key=value pairs to the message.
+
+        Args:
+            record: The log record to format.
+
+        Returns:
+            The message, followed by its context as ``(k=v, ...)`` when present.
+        """
+        message = record.getMessage()
+        ctx = getattr(record, "ctx", {})
+        if not ctx:
+            return message
+        pairs = ", ".join(f"{key}={value}" for key, value in ctx.items())
+        return f"{message} ({pairs})"
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Return a logger writing JSONL to file and human-readable text to console.
+
+    Idempotent — returns the same logger if called multiple times with the same
+    name. The level comes from the ``LOG_LEVEL`` env var (default ``INFO``).
 
     Args:
         name: Logger name, typically ``__name__`` of the calling module.
 
     Returns:
-        A Logger instance with JSONL file and stdout handlers attached.
+        A Logger instance with the JSONL file and Rich console handlers attached.
     """
     logger = logging.getLogger(name)
     if logger.handlers:
@@ -73,8 +107,13 @@ def get_logger(name: str) -> logging.Logger:
     file_handler.setFormatter(JsonlFormatter())
     logger.addHandler(file_handler)
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(JsonlFormatter())
-    logger.addHandler(stream_handler)
+    console_handler = RichHandler(
+        console=console,
+        show_path=False,
+        rich_tracebacks=True,
+        markup=False,
+    )
+    console_handler.setFormatter(ConsoleFormatter())
+    logger.addHandler(console_handler)
 
     return logger

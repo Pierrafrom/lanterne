@@ -11,6 +11,7 @@ dependencies = [
     "instructor>=1.15.3",
     "openai>=2.44.0",
     "pydantic-settings>=2.14.2",
+    "rich>=14.3.4",
     "sqlmodel>=0.0.39",
     "typer>=0.26.7",
 ]
