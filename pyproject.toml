@@ -16,6 +16,10 @@ dependencies = [
     "typer>=0.26.7",
 ]
 
+# Console entry point: `uv run cine-event-bot <command>` (scrape, stats, ...).
+[project.scripts]
+cine-event-bot = "cine_event_bot.main:app"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

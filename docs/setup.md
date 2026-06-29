@@ -48,11 +48,23 @@ ollama pull llama3.2:3b
 
 ## Run
 
+`uv sync` installs a `cine-event-bot` console entry point, so commands are:
+
 ```fish
-uv run python -m cine_event_bot scrape          # scrape + enrich + persist
-uv run python -m cine_event_bot weekly-digest   # broadcast the week's digest
-uv run python -m cine_event_bot run-bot         # start the Telegram bot
+uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
+uv run cine-event-bot stats           # summary of stored events
+uv run cine-event-bot weekly-digest   # broadcast the week's digest
+uv run cine-event-bot run-bot         # start the Telegram bot
+uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
+uv run cine-event-bot --help          # list every command
 ```
+
+(`uv run python -m cine_event_bot <command>` still works identically.)
+
+**Re-running is safe**: `scrape` upserts on a deduplication key, so running it
+repeatedly never creates duplicates — it refreshes and enriches in place (see
+[ADR 0002](decisions/0002-dedup-merge-strategy.md)). Use `reset-db` only when you
+want a truly empty database.
 
 `run-bot` answers `/start` (subscribe), `/stop` (unsubscribe), and any other
 message as a natural-language question. Schedule `scrape` and `weekly-digest`
