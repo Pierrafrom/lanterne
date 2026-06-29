@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
 
 _FIXTURES = Path(__file__).parent / "fixtures"
@@ -120,7 +121,7 @@ async def test_fetch_events_reads_the_homepage() -> None:
     client = MagicMock()
     client.get = AsyncMock(return_value=response)
 
-    events = await scraper.fetch_events(client)
+    events = await scraper.fetch_events(client, NullReporter())
 
     assert len(events) == 2
     client.get.assert_awaited_once()

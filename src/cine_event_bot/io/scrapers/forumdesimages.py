@@ -17,8 +17,9 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 
 from cine_event_bot.core.models import ScreeningEvent, Source
+from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.llm import EventExtractor
-from cine_event_bot.io.scrapers.base import RawListing, structure_via_llm
+from cine_event_bot.io.scrapers.base import RawListing, gather_events, structure_via_llm
 
 _VENUE = "Le Forum des images"
 _AGENDA_URL = "https://www.forumdesimages.fr/agenda"
@@ -88,14 +89,18 @@ class ForumDesImagesScraper:
             raw_text=raw_text,
         )
 
-    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:
+    async def fetch_events(
+        self, client: httpx.AsyncClient, reporter: ProgressReporter
+    ) -> list[ScreeningEvent]:
         """Fetch the agenda and structure each card into an event.
 
-        A card whose extraction fails is logged and skipped so one bad card
+        Cards are structured concurrently (bounded); progress is reported per
+        card. A card whose extraction fails is logged and skipped so one bad card
         never aborts the run.
 
         Args:
             client: Shared async HTTP client used for the request.
+            reporter: Progress reporter for live display.
 
         Returns:
             One unpersisted :class:`ScreeningEvent` per successfully extracted
@@ -104,9 +109,10 @@ class ForumDesImagesScraper:
         response = await client.get(_AGENDA_URL)
         response.raise_for_status()
         listings = self.parse_listings(response.text, reference_date=date.today())
-        events: list[ScreeningEvent] = []
-        for listing in listings:
-            event = await structure_via_llm(self._extractor, listing)
-            if event is not None:
-                events.append(event)
-        return events
+
+        async def extract(listing: RawListing) -> ScreeningEvent | None:
+            return await structure_via_llm(self._extractor, listing)
+
+        return await gather_events(
+            listings, extract, reporter=reporter, source=self.source.value
+        )

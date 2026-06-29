@@ -8,8 +8,7 @@ Full installation and configuration guide. For a one-minute overview see the
 - **Python ≥ 3.11** (uses `StrEnum`, `zoneinfo`, `datetime.UTC`).
 - **[uv](https://docs.astral.sh/uv/)** for dependency management.
 - **An [Ollama](https://ollama.com) instance** (local or remote) for the
-  text-source extraction and the Q&A. A small model works but limits extraction
-  quality; a larger model improves it.
+  text-source extraction and the Q&A — see *Choosing a model* below.
 - **A Telegram bot token** from [@BotFather](https://t.me/BotFather).
 - **A TMDB API key** (v3 auth) from
   [themoviedb.org](https://www.themoviedb.org/settings/api).
@@ -43,8 +42,28 @@ Then fill `.env` (never commit it — it is gitignored):
 Pull the model referenced by `OLLAMA_MODEL` if needed:
 
 ```fish
-ollama pull llama3.2:3b
+ollama pull qwen2.5:7b
 ```
+
+### Choosing a model
+
+Only the two text sources (Cinémathèque, Forum des images) call the LLM, once
+per screening; Première Projo is mapped directly with no LLM. The model must
+follow a strict JSON schema (enum `event_type`, boolean `has_team_present`).
+
+- **Recommended local: `qwen2.5:7b`** (or `qwen2.5:3b` for speed). Qwen2.5 is the
+  strongest small model for structured/JSON output and respects the enum far
+  better than `mistral` or `llama3.2:3b`, which tend to emit free text like
+  `"Not determined"` and fail validation.
+- **Fastest option: a free cloud API.** On CPU, a 7B model can take ~30-60 s per
+  screening. [Groq](https://groq.com)'s free tier runs Llama 3.3 70B at hundreds
+  of tokens/second with reliable JSON (14 400 requests/day, no card) — point
+  `OLLAMA_BASE_URL` at an OpenAI-compatible endpoint and set the model
+  accordingly. Google Gemini Flash (1 500 req/day) is another option.
+
+Robustness already built in: extraction retries only once on a validation error
+(a weak model rarely self-corrects, and retries multiply slow calls), failed
+screenings are skipped, and per-source extraction runs with bounded concurrency.
 
 ## Run
 

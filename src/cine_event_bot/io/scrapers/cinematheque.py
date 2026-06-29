@@ -10,8 +10,9 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 
 from cine_event_bot.core.models import ScreeningEvent, Source
+from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.llm import EventExtractor
-from cine_event_bot.io.scrapers.base import RawListing, structure_via_llm
+from cine_event_bot.io.scrapers.base import RawListing, gather_events, structure_via_llm
 
 _VENUE = "La Cinémathèque française"
 _INDEX_URL = "https://www.cinematheque.fr/"
@@ -87,26 +88,31 @@ class CinemathequeScraper:
         raw_text = "\n".join(part for part in parts if part)
         return RawListing(source=Source.CINEMATHEQUE, source_url=url, raw_text=raw_text)
 
-    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:
+    async def fetch_events(
+        self, client: httpx.AsyncClient, reporter: ProgressReporter
+    ) -> list[ScreeningEvent]:
         """Fetch the index then each detail page, structured into events.
 
-        Each detail page's text is structured by the LLM extractor. A listing
-        whose extraction fails is logged and skipped so one bad page never
-        aborts the whole run.
+        Detail pages are fetched and structured concurrently (bounded); progress
+        is reported per screening. A listing whose extraction fails is logged and
+        skipped so one bad page never aborts the run.
 
         Args:
             client: Shared async HTTP client used for every request.
+            reporter: Progress reporter for live display.
 
         Returns:
             One unpersisted :class:`ScreeningEvent` per successfully extracted
             screening linked from the index.
         """
         index_html = await _fetch_text(client, _INDEX_URL)
-        events: list[ScreeningEvent] = []
-        for url in self.parse_index(index_html):
+        urls = self.parse_index(index_html)
+
+        async def extract(url: str) -> ScreeningEvent | None:
             detail_html = await _fetch_text(client, url)
             listing = self.parse_detail(detail_html, url)
-            event = await structure_via_llm(self._extractor, listing)
-            if event is not None:
-                events.append(event)
-        return events
+            return await structure_via_llm(self._extractor, listing)
+
+        return await gather_events(
+            urls, extract, reporter=reporter, source=self.source.value
+        )

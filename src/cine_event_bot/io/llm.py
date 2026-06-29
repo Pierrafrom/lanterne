@@ -16,6 +16,11 @@ from cine_event_bot.config import Settings
 from cine_event_bot.core.models import ExtractedEvent
 from cine_event_bot.core.qa import QueryCriteria
 
+# One reformatting retry on a validation error, then give up: a weak local model
+# that produces an invalid value (e.g. a sentence in an enum field) rarely fixes
+# it within a few tries, so more retries just multiply the slow LLM calls.
+_MAX_RETRIES = 1
+
 _SYSTEM_PROMPT = (
     "You extract structured data about a single special cinema screening in "
     "the Paris region from the announcement text given by the user. "
@@ -60,6 +65,7 @@ class EventExtractor:
         return await self._client.chat.completions.create(
             model=self._model,
             response_model=ExtractedEvent,
+            max_retries=_MAX_RETRIES,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": raw_text},
@@ -107,6 +113,7 @@ class QuestionInterpreter:
         return await self._client.chat.completions.create(
             model=self._model,
             response_model=QueryCriteria,
+            max_retries=_MAX_RETRIES,
             messages=[
                 {"role": "system", "content": _QA_SYSTEM_PROMPT},
                 {"role": "user", "content": content},
