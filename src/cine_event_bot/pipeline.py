@@ -16,6 +16,7 @@ from typing import Protocol
 import httpx
 
 from cine_event_bot.core.models import ScreeningEvent
+from cine_event_bot.core.progress import NullReporter, ProgressReporter
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.io.scrapers.base import SourceScraper
 from cine_event_bot.logging_config import get_logger
@@ -29,52 +30,6 @@ class EventEnricher(Protocol):
     async def enrich(self, event: ScreeningEvent) -> None:
         """Enrich an event in place; a no-match leaves it untouched."""
         ...
-
-
-class ProgressReporter(Protocol):
-    """Receives ingestion progress events for live display.
-
-    All methods are best-effort UI hooks; implementations must not raise.
-    """
-
-    def source_started(self, source: str) -> None:
-        """A source's scrape has begun."""
-        ...
-
-    def events_fetched(self, source: str, total: int) -> None:
-        """The source returned ``total`` events to enrich and persist."""
-        ...
-
-    def event_processed(self, source: str) -> None:
-        """One event of the current source has been enriched and persisted."""
-        ...
-
-    def source_finished(self, source: str, count: int) -> None:
-        """The source finished with ``count`` events ingested."""
-        ...
-
-    def source_failed(self, source: str) -> None:
-        """The source's scrape raised and was skipped."""
-        ...
-
-
-class NullReporter:
-    """A :class:`ProgressReporter` that ignores every event (default)."""
-
-    def source_started(self, source: str) -> None:  # noqa: ARG002, D102
-        return
-
-    def events_fetched(self, source: str, total: int) -> None:  # noqa: ARG002, D102
-        return
-
-    def event_processed(self, source: str) -> None:  # noqa: ARG002, D102
-        return
-
-    def source_finished(self, source: str, count: int) -> None:  # noqa: ARG002, D102
-        return
-
-    def source_failed(self, source: str) -> None:  # noqa: ARG002, D102
-        return
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,16 +105,16 @@ class IngestionPipeline:
         source = scraper.source.value
         reporter.source_started(source)
         try:
-            events = await scraper.fetch_events(client)
+            # The scraper reports its own per-item progress during the slow LLM
+            # extraction, so the bar is determinate there rather than 0/?.
+            events = await scraper.fetch_events(client, reporter)
         except Exception:
             logger.exception("source scrape failed", extra={"ctx": {"source": source}})
             reporter.source_failed(source)
             return None
-        reporter.events_fetched(source, len(events))
         for event in events:
             await self._enrich(event)
             await self._repository.upsert(event)
-            reporter.event_processed(source)
         logger.info(
             "source ingested",
             extra={"ctx": {"source": source, "events": len(events)}},

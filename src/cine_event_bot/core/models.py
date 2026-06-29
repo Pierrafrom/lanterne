@@ -12,8 +12,9 @@ Three concerns are deliberately kept in separate types (see
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlmodel import Field, SQLModel
 
 from cine_event_bot.core.dedup import compute_dedup_key
@@ -58,6 +59,12 @@ class ExtractedEvent(BaseModel):
     starts_at: datetime
     has_team_present: bool = False
     description: str | None = None
+
+    @field_validator("has_team_present", mode="before")
+    @classmethod
+    def _default_team_presence(cls, value: Any) -> Any:  # noqa: ANN401 — pre-validation hook
+        """Treat a missing/null team flag as ``False`` (LLMs often emit null)."""
+        return False if value is None else value
 
 
 class ScreeningEvent(SQLModel, table=True):

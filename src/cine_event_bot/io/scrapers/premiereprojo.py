@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -58,18 +59,28 @@ class PremiereProjoScraper:
             return []
         return [event for movie in movies for event in _movie_events(movie)]
 
-    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:
+    async def fetch_events(
+        self, client: httpx.AsyncClient, reporter: ProgressReporter
+    ) -> list[ScreeningEvent]:
         """Fetch the homepage and parse its embedded screenings.
+
+        Mapping is structured (no LLM), so the events are produced at once and
+        reported in a single batch for the progress display.
 
         Args:
             client: Shared async HTTP client used for the request.
+            reporter: Progress reporter for live display.
 
         Returns:
             One :class:`ScreeningEvent` per screening on the homepage.
         """
         response = await client.get(_INDEX_URL)
         response.raise_for_status()
-        return self.parse_events(response.text)
+        events = self.parse_events(response.text)
+        reporter.events_fetched(self.source.value, len(events))
+        for _ in events:
+            reporter.event_processed(self.source.value)
+        return events
 
     @staticmethod
     def _decode_rsc(html: str) -> str:

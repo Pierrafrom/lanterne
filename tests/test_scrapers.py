@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers import CinemathequeScraper, build_scrapers
 from cine_event_bot.io.scrapers.base import SourceScraper
 
@@ -89,7 +90,7 @@ async def test_fetch_events_structures_each_listing_into_an_event() -> None:
         ]
     )
 
-    events = await scraper.fetch_events(client)
+    events = await scraper.fetch_events(client, NullReporter())
 
     assert len(events) == 2
     assert all(isinstance(event, ScreeningEvent) for event in events)
@@ -112,6 +113,6 @@ async def test_fetch_events_skips_listings_whose_extraction_fails() -> None:
         ]
     )
 
-    events = await scraper.fetch_events(client)
+    events = await scraper.fetch_events(client, NullReporter())
 
     assert events == []

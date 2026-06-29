@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import httpx
 
 from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.pipeline import IngestionPipeline
 
@@ -29,7 +30,14 @@ class _FakeScraper:
     def source(self) -> Source:
         return self._source
 
-    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:  # noqa: ARG002
+    async def fetch_events(
+        self,
+        client: httpx.AsyncClient,  # noqa: ARG002
+        reporter: ProgressReporter,
+    ) -> list[ScreeningEvent]:
+        reporter.events_fetched(self._source.value, len(self._events))
+        for _ in self._events:
+            reporter.event_processed(self._source.value)
         return self._events
 
 
@@ -41,7 +49,11 @@ class _FailingScraper:
     def source(self) -> Source:
         return self._source
 
-    async def fetch_events(self, client: httpx.AsyncClient) -> list[ScreeningEvent]:  # noqa: ARG002
+    async def fetch_events(
+        self,
+        client: httpx.AsyncClient,  # noqa: ARG002
+        reporter: ProgressReporter,  # noqa: ARG002
+    ) -> list[ScreeningEvent]:
         raise httpx.ConnectError("boom")
 
 
