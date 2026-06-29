@@ -42,6 +42,7 @@ async def handle_subscribe(chat_id: int, repository: SubscriberRepository) -> st
         The confirmation message to send back.
     """
     await repository.subscribe(chat_id)
+    logger.info("subscribed", extra={"ctx": {"chat_id": chat_id}})
     return _SUBSCRIBED
 
 
@@ -56,6 +57,7 @@ async def handle_unsubscribe(chat_id: int, repository: SubscriberRepository) -> 
         The confirmation message to send back.
     """
     await repository.unsubscribe(chat_id)
+    logger.info("unsubscribed", extra={"ctx": {"chat_id": chat_id}})
     return _UNSUBSCRIBED
 
 
@@ -81,6 +83,16 @@ async def handle_question(
     """
     criteria = await interpreter.interpret(question, reference_date.date())
     events = await repository.search(criteria)
+    logger.info(
+        "question answered",
+        extra={
+            "ctx": {
+                "question": question,
+                "criteria": criteria.model_dump(mode="json", exclude_none=True),
+                "results": len(events),
+            }
+        },
+    )
     return format_qa_answer(events)
 
 

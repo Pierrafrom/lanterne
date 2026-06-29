@@ -69,12 +69,42 @@ instance and provide the `.env` file.
 
 ## Observability
 
-Structured JSONL logs are written to `logs/app.jsonl` (and stdout). Filter
-errors without loading the whole file:
+Logs go to **two sinks**:
+
+- **Console** — human-readable, colored, with the structured context shown as
+  `key=value`. `scrape` additionally renders a live **progress bar per source**.
+  Set `LOG_LEVEL=DEBUG` for more detail.
+- **`logs/app.jsonl`** — one JSON object per line, for cheap machine/AI debugging:
 
 ```fish
-grep '"level":"ERROR"' logs/app.jsonl | tail
+grep '"level":"ERROR"' logs/app.jsonl | tail        # only errors
+jq 'select(.msg=="question answered")' logs/app.jsonl  # what the Q&A LLM produced
 ```
 
 Failed LLM extractions and enrichments include the exception traceback in the
-`exc` field.
+`exc` field. Every answered question logs the interpreted `criteria` and the
+number of `results`, so an empty answer is easy to diagnose (e.g. the model
+resolving a relative date to the wrong window).
+
+## Inspecting the database
+
+The store is a plain SQLite file (`cine_event_bot.db` by default). To browse it
+inside VS Code:
+
+1. Install the **SQLite Viewer** extension (`qwtel.sqlite-viewer`) — read-only,
+   zero-config: click the `.db` file to open a table browser. For running
+   queries, use **SQLite** (`alexcvzz.vscode-sqlite`) instead and run
+   *"SQLite: Open Database"* from the command palette.
+1. Open `cine_event_bot.db`; the `screeningevent` table holds the events and
+   `subscriber` the digest opt-ins.
+
+Useful queries:
+
+```sql
+SELECT count(*), source FROM screeningevent GROUP BY source;
+SELECT title, venue, starts_at, has_team_present
+FROM screeningevent ORDER BY starts_at LIMIT 20;
+SELECT count(*) FROM screeningevent WHERE has_team_present = 1;  -- team-present previews
+```
+
+Outside VS Code, the `sqlite3` CLI works too: `sqlite3 cine_event_bot.db`.

@@ -5,10 +5,23 @@ shown in Paris local time, with French weekday and month names (Python's
 locale-based ``strftime`` is unreliable, so the names are tabled explicitly).
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 _PARIS = ZoneInfo("Europe/Paris")
+
+
+def _to_paris(moment: datetime) -> datetime:
+    """Convert any datetime to Paris local time.
+
+    Events are stored as UTC, but SQLite hands them back timezone-naive; a naive
+    value is therefore assumed to be UTC rather than the server's local zone.
+    """
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(_PARIS)
+
+
 _WEEKDAYS = (
     "lundi",
     "mardi",
@@ -43,7 +56,7 @@ def french_date(moment: datetime) -> str:
     Returns:
         The weekday, day, and month in French (no year).
     """
-    local = moment.astimezone(_PARIS)
+    local = _to_paris(moment)
     return f"{_WEEKDAYS[local.weekday()]} {local.day} {_MONTHS[local.month - 1]}"
 
 
@@ -56,7 +69,7 @@ def french_time(moment: datetime) -> str:
     Returns:
         The local time, omitting minutes when they are zero.
     """
-    local = moment.astimezone(_PARIS)
+    local = _to_paris(moment)
     if local.minute:
         return f"{local.hour}h{local.minute:02d}"
     return f"{local.hour}h"

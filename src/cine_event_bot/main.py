@@ -15,6 +15,12 @@ from aiogram import Bot
 from cine_event_bot.config import Settings
 from cine_event_bot.core.digest import build_digest
 from cine_event_bot.io.bot import broadcast, build_dispatcher
+from cine_event_bot.io.console import (
+    RichReporter,
+    build_progress,
+    print_banner,
+    print_ingestion_summary,
+)
 from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor, build_interpreter
 from cine_event_bot.io.repository import EventRepository, SubscriberRepository
@@ -47,10 +53,7 @@ def greet() -> None:
 def scrape() -> None:
     """Scrape every source and upsert deduplicated events into the database."""
     report = asyncio.run(_run_ingestion())
-    typer.echo(
-        f"Ingested {report.events_ingested} event(s); "
-        f"{report.sources_failed} source(s) failed."
-    )
+    print_ingestion_summary(report)
 
 
 async def _run_ingestion() -> IngestionReport:
@@ -70,7 +73,8 @@ async def _run_ingestion() -> IngestionReport:
         ):
             enricher = build_tmdb_enricher(client, settings.tmdb_api_key)
             pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
-            return await pipeline.run(client)
+            with build_progress() as progress:
+                return await pipeline.run(client, RichReporter(progress))
     finally:
         await database.dispose()
 
@@ -115,6 +119,7 @@ async def _run_bot() -> None:
     await database.create_tables()
     bot = Bot(settings.telegram_bot_token)
     dispatcher = build_dispatcher(database, build_interpreter(settings))
+    print_banner("cine-event-bot is polling Telegram - press Ctrl-C to stop")
     try:
         await dispatcher.start_polling(bot)
     finally:

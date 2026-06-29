@@ -393,6 +393,7 @@ dependencies = [
     { name = "instructor" },
     { name = "openai" },
     { name = "pydantic-settings" },
+    { name = "rich" },
     { name = "sqlmodel" },
     { name = "typer" },
 ]
@@ -418,6 +419,7 @@ requires-dist = [
     { name = "instructor", specifier = ">=1.15.3" },
     { name = "openai", specifier = ">=2.44.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
+    { name = "rich", specifier = ">=14.3.4" },
     { name = "sqlmodel", specifier = ">=0.0.39" },
     { name = "typer", specifier = ">=0.26.7" },
 ]
