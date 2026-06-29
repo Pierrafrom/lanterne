@@ -65,6 +65,30 @@ async def test_list_between_orders_by_start_time(session: AsyncSession) -> None:
     assert [event.dedup_key for event in window] == ["sooner", "later"]
 
 
+async def test_stats_on_empty_database(session: AsyncSession) -> None:
+    stats = await EventRepository(session).stats()
+
+    assert stats.total == 0
+    assert stats.first_starts_at is None
+
+
+async def test_stats_summarizes_stored_events(session: AsyncSession) -> None:
+    repo = EventRepository(session)
+    await repo.add(_event("a", datetime(2026, 7, 1, 20, 0, tzinfo=UTC)))
+    await repo.add(_event("b", datetime(2026, 7, 5, 20, 0, tzinfo=UTC)))
+
+    stats = await repo.stats()
+
+    assert stats.total == 2
+    assert stats.by_source == {"premiereprojo.fr": 2}
+    assert stats.by_type == {"avant_premiere": 2}
+    # SQLite returns datetimes timezone-naive; only ordering and date matter here.
+    assert stats.first_starts_at is not None
+    assert stats.last_starts_at is not None
+    assert stats.first_starts_at < stats.last_starts_at
+    assert stats.first_starts_at.day == 1
+
+
 async def test_subscribe_creates_active_subscriber(session: AsyncSession) -> None:
     repo = SubscriberRepository(session)
 

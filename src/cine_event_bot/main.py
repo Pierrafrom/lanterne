@@ -20,10 +20,15 @@ from cine_event_bot.io.console import (
     build_progress,
     print_banner,
     print_ingestion_summary,
+    print_stats,
 )
 from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor, build_interpreter
-from cine_event_bot.io.repository import EventRepository, SubscriberRepository
+from cine_event_bot.io.repository import (
+    EventRepository,
+    EventStats,
+    SubscriberRepository,
+)
 from cine_event_bot.io.scrapers import build_scrapers
 from cine_event_bot.io.tmdb import build_tmdb_enricher
 from cine_event_bot.pipeline import IngestionPipeline, IngestionReport
@@ -75,6 +80,47 @@ async def _run_ingestion() -> IngestionReport:
             pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
             with build_progress() as progress:
                 return await pipeline.run(client, RichReporter(progress))
+    finally:
+        await database.dispose()
+
+
+@app.command()
+def stats() -> None:
+    """Show a summary of the events currently stored in the database."""
+    print_stats(asyncio.run(_load_stats()))
+
+
+async def _load_stats() -> EventStats:
+    """Open the database and compute the event statistics."""
+    settings = Settings()
+    database = Database(settings.database_url)
+    await database.create_tables()
+    try:
+        async with database.session() as session:
+            return await EventRepository(session).stats()
+    finally:
+        await database.dispose()
+
+
+@app.command(name="reset-db")
+def reset_db(
+    yes: bool = typer.Option(  # noqa: B008 — Typer reads options from defaults
+        False, "--yes", "-y", help="Skip the confirmation prompt."
+    ),
+) -> None:
+    """Drop and recreate all tables — deletes every stored event and subscriber."""
+    if not yes and not typer.confirm("This deletes ALL stored data. Continue?"):
+        typer.echo("Aborted.")
+        return
+    asyncio.run(_reset_db())
+    typer.echo("Database reset.")
+
+
+async def _reset_db() -> None:
+    """Drop and recreate the database schema."""
+    database = Database(Settings().database_url)
+    try:
+        await database.reset_tables()
     finally:
         await database.dispose()
 

@@ -7,6 +7,7 @@ import time
 import pytest
 from typer.testing import CliRunner
 
+from cine_event_bot.io.repository import EventStats
 from cine_event_bot.logging_config import JsonlFormatter, get_logger
 from cine_event_bot.main import app, get_greeting
 from cine_event_bot.pipeline import IngestionReport
@@ -38,6 +39,44 @@ def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     assert "3 event(s)" in result.output
     assert "1 source(s) failed" in result.output
+
+
+def test_stats_command_prints_total(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_stats() -> EventStats:
+        return EventStats(total=169, by_source={"premiereprojo.fr": 169})
+
+    monkeypatch.setattr("cine_event_bot.main._load_stats", fake_stats)
+    result = CliRunner().invoke(app, ["stats"])
+
+    assert result.exit_code == 0
+    assert "169" in result.output
+
+
+def test_reset_db_command_runs_with_yes(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = False
+
+    async def fake_reset() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("cine_event_bot.main._reset_db", fake_reset)
+    result = CliRunner().invoke(app, ["reset-db", "--yes"])
+
+    assert result.exit_code == 0
+    assert called is True
+    assert "reset" in result.output.lower()
+
+
+def test_reset_db_command_aborts_without_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_reset() -> None:
+        raise AssertionError("reset must not run when declined")
+
+    monkeypatch.setattr("cine_event_bot.main._reset_db", fail_reset)
+    result = CliRunner().invoke(app, ["reset-db"], input="n\n")
+
+    assert "Aborted" in result.output
 
 
 def test_get_logger_returns_logger() -> None:

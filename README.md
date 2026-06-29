@@ -27,9 +27,10 @@ cd cine-event-bot
 uv sync --all-groups
 cp .env.example .env   # fill TELEGRAM_BOT_TOKEN, TMDB_API_KEY, OLLAMA_BASE_URL, OLLAMA_MODEL
 
-uv run python -m cine_event_bot scrape          # scrape + enrich + persist
-uv run python -m cine_event_bot weekly-digest   # broadcast the week's digest
-uv run python -m cine_event_bot run-bot         # start the Telegram bot
+uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
+uv run cine-event-bot stats           # summary of stored events
+uv run cine-event-bot weekly-digest   # broadcast the week's digest
+uv run cine-event-bot run-bot         # start the Telegram bot
 ```
 
 Full instructions (prerequisites, Ollama model, Docker, observability) in

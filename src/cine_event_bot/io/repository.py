@@ -5,6 +5,8 @@ its write operations, so callers work in terms of domain intent
 (``add`` an event, ``subscribe`` a chat) rather than session mechanics.
 """
 
+from collections import Counter
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from sqlalchemy import or_
@@ -15,6 +17,29 @@ from cine_event_bot.core.models import ScreeningEvent, Subscriber
 from cine_event_bot.core.qa import QueryCriteria
 
 _SEARCH_LIMIT = 20
+
+
+@dataclass(frozen=True, slots=True)
+class EventStats:
+    """A snapshot of the stored events, for the ``stats`` command.
+
+    Attributes:
+        total: Number of events stored.
+        by_source: Event count per source domain.
+        by_type: Event count per event type.
+        team_present: Number of events with the film team present.
+        enriched: Number of events enriched with a TMDB id.
+        first_starts_at: Earliest screening start, or None when empty.
+        last_starts_at: Latest screening start, or None when empty.
+    """
+
+    total: int
+    by_source: dict[str, int] = field(default_factory=dict)
+    by_type: dict[str, int] = field(default_factory=dict)
+    team_present: int = 0
+    enriched: int = 0
+    first_starts_at: datetime | None = None
+    last_starts_at: datetime | None = None
 
 
 class EventRepository:
@@ -145,6 +170,27 @@ class EventRepository:
         )
         result = await self._session.exec(statement)
         return list(result.all())
+
+    async def stats(self) -> EventStats:
+        """Compute a summary snapshot of the stored events.
+
+        Returns:
+            An :class:`EventStats` with totals, breakdowns, and the date range.
+        """
+        result = await self._session.exec(select(ScreeningEvent))
+        events = list(result.all())
+        if not events:
+            return EventStats(total=0)
+        starts = sorted(event.starts_at for event in events)
+        return EventStats(
+            total=len(events),
+            by_source=dict(Counter(event.source.value for event in events)),
+            by_type=dict(Counter(event.event_type.value for event in events)),
+            team_present=sum(1 for event in events if event.has_team_present),
+            enriched=sum(1 for event in events if event.tmdb_id is not None),
+            first_starts_at=starts[0],
+            last_starts_at=starts[-1],
+        )
 
 
 class SubscriberRepository:

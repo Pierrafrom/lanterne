@@ -37,6 +37,12 @@ class Database:
         async with self._engine.begin() as connection:
             await connection.run_sync(SQLModel.metadata.create_all)
 
+    async def reset_tables(self) -> None:
+        """Drop every table and recreate it — wipes all data."""
+        async with self._engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.drop_all)
+            await connection.run_sync(SQLModel.metadata.create_all)
+
     def session(self) -> AsyncSession:
         """Open a new session as an async context manager.
 

@@ -71,8 +71,10 @@ uv sync --all-groups
 cp .env.example .env   # fill in the required tokens
 uv run pytest          # run tests
 
-# Admin CLI (Typer) — see `uv run python -m cine_event_bot --help`
-uv run python -m cine_event_bot scrape          # scrape + enrich + persist
-uv run python -m cine_event_bot weekly-digest   # broadcast the week's digest
-uv run python -m cine_event_bot run-bot         # start the Telegram bot
+# Admin CLI (Typer) via the `cine-event-bot` entry point — see `--help`
+uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
+uv run cine-event-bot stats           # summary of stored events
+uv run cine-event-bot weekly-digest   # broadcast the week's digest
+uv run cine-event-bot run-bot         # start the Telegram bot
+uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
 ```

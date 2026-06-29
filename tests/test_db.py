@@ -32,3 +32,15 @@ async def test_in_memory_database_starts_empty() -> None:
         result = await session.exec(select(ScreeningEvent))
         assert result.first() is None
     await db.dispose()
+
+
+async def test_reset_tables_wipes_all_data(database: Database) -> None:
+    async with database.session() as session:
+        session.add(_event())
+        await session.commit()
+
+    await database.reset_tables()
+
+    async with database.session() as session:
+        result = await session.exec(select(ScreeningEvent))
+        assert result.first() is None
