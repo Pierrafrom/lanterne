@@ -38,6 +38,18 @@ async def test_get_by_dedup_key_returns_none_when_absent(
     assert await repo.get_by_dedup_key("missing") is None
 
 
+async def test_starts_at_round_trips_as_utc_aware(session: AsyncSession) -> None:
+    repo = EventRepository(session)
+    moment = datetime(2026, 7, 7, 18, 30, tzinfo=UTC)
+    await repo.add(_event("tz", moment))
+
+    found = await repo.get_by_dedup_key("tz")
+
+    assert found is not None
+    assert found.starts_at.tzinfo is not None  # not naive (SQLite default)
+    assert found.starts_at == moment
+
+
 async def test_list_between_filters_on_start_time(session: AsyncSession) -> None:
     repo = EventRepository(session)
     await repo.add(_event("inside", datetime(2026, 7, 2, 20, 0, tzinfo=UTC)))
