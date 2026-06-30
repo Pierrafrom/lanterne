@@ -10,14 +10,53 @@ Three concerns are deliberately kept in separate types (see
 - :class:`Subscriber` — a Telegram chat opted in to the weekly digest.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, field_validator
+from sqlalchemy import DateTime
+from sqlalchemy.engine import Dialect
+from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, SQLModel
 
 from cine_event_bot.core.dedup import compute_dedup_key
+
+
+class UtcDateTime(TypeDecorator[datetime]):
+    """Persist timezone-aware datetimes as UTC and read them back as UTC.
+
+    SQLite does not preserve timezone info, so a stored aware-UTC datetime would
+    otherwise come back naive and be misread as server-local time. This
+    normalizes to UTC on write and re-attaches UTC on read, keeping the database
+    self-describing regardless of the backend.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(
+        self,
+        value: datetime | None,
+        dialect: Dialect,  # noqa: ARG002 — required by the TypeDecorator API
+    ) -> datetime | None:
+        """Normalize a value to UTC before storing it."""
+        if value is None:
+            return None
+        aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return aware.astimezone(UTC)
+
+    def process_result_value(
+        self,
+        value: datetime | None,
+        dialect: Dialect,  # noqa: ARG002 — required by the TypeDecorator API
+    ) -> datetime | None:
+        """Return a stored value as a UTC-aware datetime."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class EventType(StrEnum):
@@ -91,7 +130,7 @@ class ScreeningEvent(SQLModel, table=True):
     title: str
     event_type: EventType
     venue: str
-    starts_at: datetime
+    starts_at: datetime = Field(sa_type=UtcDateTime)
     has_team_present: bool = False
     description: str | None = None
 
@@ -150,5 +189,5 @@ class Subscriber(SQLModel, table=True):
     """
 
     chat_id: int = Field(primary_key=True)
-    subscribed_at: datetime
+    subscribed_at: datetime = Field(sa_type=UtcDateTime)
     is_active: bool = True
