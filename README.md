@@ -13,7 +13,9 @@ digest**, and answers **natural-language questions** about programmed films.
   (HTML + LLM extraction).
 - **Cross-source deduplication** — the same screening on two sources collapses
   to one, enriched from both.
-- **TMDB enrichment** — synopsis, poster, release year per film.
+- **TMDB enrichment** — synopsis, poster, director, genres, runtime,
+  release year, and rating, fetched once per film and shared by all its
+  screenings.
 - **Weekly digest** in French, grouped by day, in Paris local time.
 - **Natural-language Q&A** — questions are turned into structured filters by the
   LLM and run against the database (no RAG).

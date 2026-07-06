@@ -7,88 +7,155 @@ from cine_event_bot.core.models import Film
 from cine_event_bot.io.tmdb import TmdbClient, TmdbEnricher
 
 
-def _client_returning(payload: dict[str, Any]) -> tuple[TmdbClient, MagicMock]:
-    response = MagicMock()
-    response.json = MagicMock(return_value=payload)
-    response.raise_for_status = MagicMock()
-    http = MagicMock()
-    http.get = AsyncMock(return_value=response)
-    return TmdbClient(http, api_key="key"), http
+def _search_payload(**overrides: Any) -> dict[str, Any]:
+    result = {"id": 693134, "title": "Dune: Part Two"}
+    result.update(overrides)
+    return {"results": [result]}
 
 
-def _result(**overrides: Any) -> dict[str, Any]:
-    result = {
+def _details_payload(**overrides: Any) -> dict[str, Any]:
+    details = {
         "id": 693134,
-        "title": "Dune: Part Two",
+        "title": "Dune, deuxième partie",
+        "original_title": "Dune: Part Two",
         "overview": "Paul Atreides unites with the Fremen.",
         "poster_path": "/poster.jpg",
         "release_date": "2024-02-27",
+        "runtime": 167,
+        "vote_average": 8.2,
+        "genres": [
+            {"id": 878, "name": "Science-Fiction"},
+            {"id": 12, "name": "Aventure"},
+        ],
+        "credits": {
+            "crew": [
+                {"name": "Denis Villeneuve", "job": "Director"},
+                {"name": "Greig Fraser", "job": "Director of Photography"},
+            ]
+        },
     }
-    result.update(overrides)
-    return result
+    details.update(overrides)
+    return details
 
 
-def _film() -> Film:
-    return Film(title_key="dune: part two", title="Dune: Part Two")
+def _client(
+    search: dict[str, Any] | None = None, details: dict[str, Any] | None = None
+) -> tuple[TmdbClient, MagicMock]:
+    responses = []
+    for payload in (search or _search_payload(), details or _details_payload()):
+        response = MagicMock()
+        response.json = MagicMock(return_value=payload)
+        response.raise_for_status = MagicMock()
+        responses.append(response)
+    http = MagicMock()
+    http.get = AsyncMock(side_effect=responses)
+    return TmdbClient(http, api_key="key"), http
 
 
-async def test_search_maps_first_result() -> None:
-    client, _ = _client_returning({"results": [_result()]})
+async def test_find_maps_search_and_details() -> None:
+    client, _ = _client()
 
-    match = await client.search("Dune: Part Two")
+    match = await client.find("Dune: Part Two")
 
     assert match is not None
     assert match.tmdb_id == 693134
+    assert match.original_title == "Dune: Part Two"
+    assert match.director == "Denis Villeneuve"
+    assert match.release_year == 2024
+    assert match.runtime_minutes == 167
+    assert match.genres == ("Science-Fiction", "Aventure")
     assert match.overview == "Paul Atreides unites with the Fremen."
     assert match.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
-    assert match.release_year == 2024
+    assert match.vote_average == 8.2
 
 
-async def test_search_passes_title_as_query() -> None:
-    client, http = _client_returning({"results": [_result()]})
+async def test_find_queries_search_then_details_with_credits() -> None:
+    client, http = _client()
 
-    await client.search("Mulholland Drive")
+    await client.find("Mulholland Drive")
 
-    _, kwargs = http.get.call_args
-    assert kwargs["params"]["query"] == "Mulholland Drive"
-    assert kwargs["params"]["api_key"] == "key"
-
-
-async def test_search_returns_none_when_no_results() -> None:
-    client, _ = _client_returning({"results": []})
-
-    assert await client.search("Unknown film") is None
+    search_call, details_call = http.get.await_args_list
+    assert search_call.kwargs["params"]["query"] == "Mulholland Drive"
+    assert search_call.kwargs["params"]["api_key"] == "key"
+    assert "/movie/693134" in details_call.args[0]
+    assert details_call.kwargs["params"]["append_to_response"] == "credits"
 
 
-async def test_search_handles_missing_poster_and_date() -> None:
-    client, _ = _client_returning(
-        {"results": [_result(poster_path=None, release_date="")]}
+async def test_find_returns_none_when_no_results() -> None:
+    client, http = _client(search={"results": []})
+
+    assert await client.find("Unknown film") is None
+    http.get.assert_awaited_once()  # no details call without a match
+
+
+async def test_find_handles_missing_optional_fields() -> None:
+    client, _ = _client(
+        details=_details_payload(
+            poster_path=None,
+            release_date="",
+            runtime=None,
+            vote_average=None,
+            genres=[],
+            credits={"crew": []},
+            original_title=None,
+            overview="",
+        )
     )
 
-    match = await client.search("Dune")
+    match = await client.find("Dune")
 
     assert match is not None
     assert match.poster_url is None
     assert match.release_year is None
+    assert match.runtime_minutes is None
+    assert match.vote_average is None
+    assert match.genres is None
+    assert match.director is None
+    assert match.original_title is None
+    assert match.overview is None
 
 
-async def test_enricher_fills_film_fields() -> None:
-    client, _ = _client_returning({"results": [_result()]})
-    film = _film()
+async def test_find_joins_multiple_directors() -> None:
+    client, _ = _client(
+        details=_details_payload(
+            credits={
+                "crew": [
+                    {"name": "Lana Wachowski", "job": "Director"},
+                    {"name": "Lilly Wachowski", "job": "Director"},
+                ]
+            }
+        )
+    )
+
+    match = await client.find("Matrix")
+
+    assert match is not None
+    assert match.director == "Lana Wachowski, Lilly Wachowski"
+
+
+async def test_enricher_fills_every_film_field() -> None:
+    client, _ = _client()
+    film = Film(title_key="dune: part two", title="Dune: Part Two")
 
     await TmdbEnricher(client).enrich(film)
 
     assert film.tmdb_id == 693134
+    assert film.original_title == "Dune: Part Two"
+    assert film.director == "Denis Villeneuve"
+    assert film.release_year == 2024
+    assert film.runtime_minutes == 167
+    assert film.genres == ["Science-Fiction", "Aventure"]
     assert film.overview == "Paul Atreides unites with the Fremen."
     assert film.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
-    assert film.release_year == 2024
+    assert film.vote_average == 8.2
 
 
 async def test_enricher_leaves_film_untouched_without_match() -> None:
-    client, _ = _client_returning({"results": []})
-    film = _film()
+    client, _ = _client(search={"results": []})
+    film = Film(title_key="dune", title="Dune")
 
     await TmdbEnricher(client).enrich(film)
 
     assert film.tmdb_id is None
     assert film.overview is None
+    assert film.director is None
