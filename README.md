@@ -52,4 +52,6 @@ testing approach.
 - [docs/testing.md](docs/testing.md) — how to run and write tests
 - [docs/scraping-strategy.md](docs/scraping-strategy.md) — how to ingest a new source
 - [docs/decisions/](docs/decisions/) — Architecture Decision Records
+- [CONTRIBUTING.md](CONTRIBUTING.md) — local workflow, gates, branch/PR conventions
+- [CHANGELOG.md](CHANGELOG.md) — notable changes
 - [CLAUDE.md](CLAUDE.md) — project context for AI assistants
