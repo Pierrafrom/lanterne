@@ -15,11 +15,17 @@ from aiogram import Bot
 
 from cine_event_bot.config import Settings
 from cine_event_bot.core.digest import build_digest
+from cine_event_bot.core.evaluation import (
+    EvaluationSummary,
+    evaluate_cases,
+    parse_golden_cases,
+)
 from cine_event_bot.io.bot import broadcast, build_dispatcher
 from cine_event_bot.io.console import (
     RichReporter,
     build_progress,
     print_banner,
+    print_evaluation,
     print_ingestion_summary,
     print_stats,
 )
@@ -124,6 +130,27 @@ async def _reset_db() -> None:
         await database.reset_tables()
     finally:
         await database.dispose()
+
+
+@app.command(name="eval-extraction")
+def eval_extraction(
+    dataset: Path = typer.Option(  # noqa: B008 — Typer reads options from defaults
+        Path("eval/golden_extractions.json"),
+        "--dataset",
+        "-d",
+        help="Golden dataset file.",
+    ),
+) -> None:
+    """Score the configured LLM's extraction quality on the golden dataset."""
+    settings = Settings()
+    summary = asyncio.run(_run_evaluation(settings, dataset))
+    print_evaluation(summary, model=settings.ollama_model)
+
+
+async def _run_evaluation(settings: Settings, dataset: Path) -> EvaluationSummary:
+    """Run the configured extractor over the golden dataset."""
+    cases = parse_golden_cases(dataset.read_text(encoding="utf-8"))
+    return await evaluate_cases(build_extractor(settings), cases)
 
 
 @app.command(name="backup-db")
