@@ -134,3 +134,15 @@ async def test_search_without_criteria_returns_all_sorted(
     results = await repo.search(QueryCriteria())
 
     assert [event.film.title for event in results] == ["Sooner", "Later"]
+
+
+def test_format_qa_answer_shows_the_event_type_in_french() -> None:
+    event = make_display_event(
+        title="Nosferatu",
+        event_type=EventType.SEANCE_CULTE,
+        starts_at=datetime(2026, 7, 7, 20, 0, tzinfo=UTC),
+    )
+
+    answer = format_qa_answer([event])
+
+    assert "Séance culte" in answer

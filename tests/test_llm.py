@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 from cine_event_bot.config import Settings
 from cine_event_bot.core.models import EventType, ExtractedEvent
-from cine_event_bot.io.llm import EventExtractor, build_extractor
+from cine_event_bot.io.llm import (
+    _QA_SYSTEM_PROMPT,
+    _SYSTEM_PROMPT,
+    EventExtractor,
+    build_extractor,
+)
 
 
 def _expected() -> ExtractedEvent:
@@ -57,3 +62,13 @@ def test_build_extractor_wires_the_settings_model() -> None:
 
     assert isinstance(extractor, EventExtractor)
     assert extractor.model == "llama3.2"
+
+
+def test_extraction_prompt_describes_every_event_type() -> None:
+    for member in EventType:
+        assert member.value in _SYSTEM_PROMPT
+
+
+def test_qa_prompt_lists_every_event_type() -> None:
+    for member in EventType:
+        assert member.value in _QA_SYSTEM_PROMPT

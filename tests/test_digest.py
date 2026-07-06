@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from factories import make_display_event
 
 from cine_event_bot.core.digest import build_digest
+from cine_event_bot.core.frenchfmt import event_type_label
+from cine_event_bot.core.models import EventType
 
 
 def test_build_digest_without_events_is_explicit() -> None:
@@ -78,3 +80,20 @@ def test_build_digest_treats_naive_datetime_as_utc() -> None:
     # 18:00 UTC -> 20h Paris (summer, UTC+2), not the server's local zone.
     assert "20h" in message
     assert "mardi 7 juillet" in message.lower()
+
+
+def test_build_digest_shows_the_event_type_in_french() -> None:
+    concert = make_display_event(
+        title="Metropolis",
+        event_type=EventType.CINE_CONCERT,
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+    )
+
+    message = build_digest([concert])
+
+    assert "Ciné-concert" in message
+
+
+def test_every_event_type_has_a_french_label() -> None:
+    for member in EventType:
+        assert event_type_label(member)
