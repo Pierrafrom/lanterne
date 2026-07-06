@@ -25,7 +25,7 @@ flowchart TD
     CLI["main.py — Typer CLI<br/>(scrape, weekly-digest, run-bot)"]
 
     subgraph core["core/ — pure logic"]
-        models["models<br/>(ScreeningEvent, Subscriber, enums)"]
+        models["models<br/>(Film, Venue, ScreeningEvent,<br/>Sighting, Subscriber, enums)"]
         dedup["dedup<br/>(compute_dedup_key)"]
         qa["qa<br/>(QueryCriteria, format_qa_answer)"]
         digest["digest"]
@@ -58,32 +58,45 @@ flowchart TD
     digest --> frenchfmt
 ```
 
+## Data model
+
+The persisted schema is normalized around the screening (see
+[ADR 0006](decisions/0006-relational-schema-split.md)): `Film` (one row per
+film, carrying the TMDB enrichment shared by all its screenings), `Venue` (one
+row per venue, keyed by its normalized name), and `ScreeningEvent` referencing
+both. Scrapers do not build rows directly — they produce `Sighting` objects
+(extracted facts + provenance) that `EventRepository.ingest` resolves into
+rows.
+
 ## Ingestion flow
 
-`scrape` runs every scraper, enriches each screening, and upserts it. Scrapers
-return ready-to-persist `ScreeningEvent`s; whether they used the LLM (text
-sources) or mapped structured JSON (Première Projo) is internal to each scraper,
-so the pipeline stays uniform. A failing source is logged and skipped; a failing
-enrichment is logged and the event is still persisted.
+`scrape` runs every scraper, ingests each sighting, and enriches its film when
+it has no TMDB match yet. Whether a scraper used the LLM (text sources) or
+mapped structured JSON (Première Projo) is internal to it, so the pipeline
+stays uniform. A failing source is logged and skipped; a failing enrichment is
+logged and the event stays persisted.
 
 ```mermaid
 sequenceDiagram
     participant CLI as scrape CLI
     participant P as IngestionPipeline
     participant S as SourceScraper
-    participant T as TmdbEnricher
     participant R as EventRepository
+    participant T as TmdbEnricher
 
     CLI->>P: run
     loop each scraper
         P->>S: fetch_events
         Note over S: text sources use the LLM, structured sources map JSON
-        S-->>P: screening events
-        loop each event
-            P->>T: enrich
-            T-->>P: event with TMDB fields
-            P->>R: upsert
-            Note over R: on collision, first source wins and later ones enrich
+        S-->>P: sightings
+        loop each sighting
+            P->>R: ingest
+            Note over R: resolves Film/Venue rows —<br/>on collision first source wins and later ones enrich
+            R-->>P: event (film and venue loaded)
+            alt film has no TMDB match yet
+                P->>T: enrich(film)
+                P->>R: save_film
+            end
         end
     end
     P-->>CLI: IngestionReport
@@ -122,6 +135,7 @@ Recorded as ADRs in [`docs/decisions/`](decisions/):
 - [0003](decisions/0003-scraping-strategy.md) — thin scrapers, LLM structuring
 - [0004](decisions/0004-rsc-extraction-and-pipeline.md) — RSC extraction + scraper output contract
 - [0005](decisions/0005-drop-sortiraparis.md) — dropping Sortir à Paris
+- [0006](decisions/0006-relational-schema-split.md) — Film/Venue/sighting schema split
 
 See also [`scraping-strategy.md`](scraping-strategy.md) for how a new source is
 classified and scraped.

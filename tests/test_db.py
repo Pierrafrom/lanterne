@@ -1,23 +1,16 @@
 """Tests for the async database wrapper and schema creation."""
 
-from datetime import UTC, datetime
-
+from factories import make_display_event
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.models import ScreeningEvent
 from cine_event_bot.io.db import Database
 
 
 def _event() -> ScreeningEvent:
-    return ScreeningEvent(
-        dedup_key="key-1",
-        title="Dune",
-        event_type=EventType.AVANT_PREMIERE,
-        venue="Le Grand Rex",
-        starts_at=datetime(2026, 7, 1, 20, 30, tzinfo=UTC),
-        source=Source.PREMIERE_PROJO,
-    )
+    # Adding the event cascades to its film and venue rows.
+    return make_display_event()
 
 
 async def test_create_tables_allows_inserting_an_event(session: AsyncSession) -> None:

@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
 from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers.forumdesimages import ForumDesImagesScraper
 
@@ -73,6 +73,6 @@ async def test_fetch_events_structures_each_card() -> None:
     events = await scraper.fetch_events(client, NullReporter())
 
     assert len(events) == 2
-    assert all(isinstance(event, ScreeningEvent) for event in events)
+    assert all(isinstance(event, Sighting) for event in events)
     assert extractor.extract.await_count == 2
     client.get.assert_awaited_once()

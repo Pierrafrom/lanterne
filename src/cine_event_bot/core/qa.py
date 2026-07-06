@@ -58,10 +58,14 @@ def format_qa_answer(events: Sequence[ScreeningEvent]) -> str:
 
 
 def _answer_line(event: ScreeningEvent) -> str:
-    """Format one matching screening as an answer bullet line."""
-    title = event.title
-    if event.release_year:
-        title = f"{title} ({event.release_year})"
+    """Format one matching screening as an answer bullet line.
+
+    Expects the event's ``film`` and ``venue`` relationships to be loaded
+    (repository queries eager-load them).
+    """
+    title = event.film.title
+    if event.film.release_year:
+        title = f"{title} ({event.film.release_year})"
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
     when = f"{french_date(event.starts_at)} à {french_time(event.starts_at)}"
-    return f"• {when} — {title} · {event.venue}{suffix}"
+    return f"• {when} — {title} · {event.venue.name}{suffix}"

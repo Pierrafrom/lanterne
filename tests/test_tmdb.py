@@ -1,10 +1,9 @@
-"""Tests for the TMDB client and the screening enricher (httpx mocked)."""
+"""Tests for the TMDB client and the film enricher (httpx mocked)."""
 
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.models import Film
 from cine_event_bot.io.tmdb import TmdbClient, TmdbEnricher
 
 
@@ -29,15 +28,8 @@ def _result(**overrides: Any) -> dict[str, Any]:
     return result
 
 
-def _event() -> ScreeningEvent:
-    return ScreeningEvent(
-        dedup_key="k",
-        title="Dune: Part Two",
-        event_type=EventType.AVANT_PREMIERE,
-        venue="Le Grand Rex",
-        starts_at=datetime(2026, 7, 1, 20, 30, tzinfo=UTC),
-        source=Source.PREMIERE_PROJO,
-    )
+def _film() -> Film:
+    return Film(title_key="dune: part two", title="Dune: Part Two")
 
 
 async def test_search_maps_first_result() -> None:
@@ -80,23 +72,23 @@ async def test_search_handles_missing_poster_and_date() -> None:
     assert match.release_year is None
 
 
-async def test_enricher_fills_event_fields() -> None:
+async def test_enricher_fills_film_fields() -> None:
     client, _ = _client_returning({"results": [_result()]})
-    event = _event()
+    film = _film()
 
-    await TmdbEnricher(client).enrich(event)
+    await TmdbEnricher(client).enrich(film)
 
-    assert event.tmdb_id == 693134
-    assert event.overview == "Paul Atreides unites with the Fremen."
-    assert event.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
-    assert event.release_year == 2024
+    assert film.tmdb_id == 693134
+    assert film.overview == "Paul Atreides unites with the Fremen."
+    assert film.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert film.release_year == 2024
 
 
-async def test_enricher_leaves_event_untouched_without_match() -> None:
+async def test_enricher_leaves_film_untouched_without_match() -> None:
     client, _ = _client_returning({"results": []})
-    event = _event()
+    film = _film()
 
-    await TmdbEnricher(client).enrich(event)
+    await TmdbEnricher(client).enrich(film)
 
-    assert event.tmdb_id is None
-    assert event.overview is None
+    assert film.tmdb_id is None
+    assert film.overview is None

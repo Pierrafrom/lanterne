@@ -1,9 +1,10 @@
-"""TMDB enrichment: match a screening's film and fill its metadata.
+"""TMDB enrichment: match a film and fill its metadata.
 
 A thin async client over TMDB's v3 search endpoint, plus an enricher that fills
-a :class:`ScreeningEvent`'s TMDB fields (id, overview, poster, release year)
-from the best title match. Network failures are the caller's concern; the
-enricher only maps a successful response.
+a :class:`Film`'s TMDB fields (id, overview, poster, release year) from the
+best title match. Enrichment runs once per film row — every screening of the
+film shares it. Network failures are the caller's concern; the enricher only
+maps a successful response.
 """
 
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from cine_event_bot.core.models import ScreeningEvent
+from cine_event_bot.core.models import Film
 
 _SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
 _IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
@@ -72,7 +73,7 @@ class TmdbClient:
 
 
 class TmdbEnricher:
-    """Fills a screening's TMDB fields from the best title match."""
+    """Fills a film's TMDB fields from the best title match."""
 
     def __init__(self, client: TmdbClient) -> None:
         """Bind the enricher to a TMDB client.
@@ -82,21 +83,21 @@ class TmdbEnricher:
         """
         self._client = client
 
-    async def enrich(self, event: ScreeningEvent) -> None:
-        """Enrich an event in place with TMDB metadata, if a match is found.
+    async def enrich(self, film: Film) -> None:
+        """Enrich a film in place with TMDB metadata, if a match is found.
 
-        Leaves the event untouched when no film matches its title.
+        Leaves the film untouched when no result matches its title.
 
         Args:
-            event: The screening to enrich; mutated in place.
+            film: The film to enrich; mutated in place.
         """
-        match = await self._client.search(event.title)
+        match = await self._client.search(film.title)
         if match is None:
             return
-        event.tmdb_id = match.tmdb_id
-        event.overview = match.overview
-        event.poster_url = match.poster_url
-        event.release_year = match.release_year
+        film.tmdb_id = match.tmdb_id
+        film.overview = match.overview
+        film.poster_url = match.poster_url
+        film.release_year = match.release_year
 
 
 def build_tmdb_enricher(client: httpx.AsyncClient, api_key: str) -> TmdbEnricher:
@@ -107,7 +108,7 @@ def build_tmdb_enricher(client: httpx.AsyncClient, api_key: str) -> TmdbEnricher
         api_key: TMDB v3 API key.
 
     Returns:
-        A :class:`TmdbEnricher` ready to enrich events.
+        A :class:`TmdbEnricher` ready to enrich films.
     """
     return TmdbEnricher(TmdbClient(client, api_key))
 

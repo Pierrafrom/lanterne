@@ -3,7 +3,7 @@
 The site is a Next.js app that server-renders its screenings as structured JSON
 embedded in the React Server Components stream (``self.__next_f.push([1,"…"])``).
 That JSON is far more stable than the generated CSS, and already fully typed, so
-the scraper extracts it and maps it straight to :class:`ScreeningEvent` with no
+the scraper extracts it and maps it straight to :class:`Sighting` with no
 LLM call (see ``docs/scraping-strategy.md`` and ADR 0004).
 
 Every Première Projo entry is an avant-première; the ``avpType`` field
@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.logging_config import get_logger
 
@@ -39,14 +39,14 @@ class PremiereProjoScraper:
         """The source this scraper covers."""
         return Source.PREMIERE_PROJO
 
-    def parse_events(self, html: str) -> list[ScreeningEvent]:
+    def parse_events(self, html: str) -> list[Sighting]:
         """Extract screenings from the page's embedded RSC JSON.
 
         Args:
             html: HTML of the premiereprojo.fr homepage.
 
         Returns:
-            One :class:`ScreeningEvent` per (film, show) pair found. Returns an
+            One :class:`Sighting` per (film, show) pair found. Returns an
             empty list (with a warning) if the expected payload is absent.
         """
         decoded = self._decode_rsc(html)
@@ -57,30 +57,30 @@ class PremiereProjoScraper:
                 extra={"ctx": {"html_len": len(html)}},
             )
             return []
-        return [event for movie in movies for event in _movie_events(movie)]
+        return [sighting for movie in movies for sighting in _movie_events(movie)]
 
     async def fetch_events(
         self, client: httpx.AsyncClient, reporter: ProgressReporter
-    ) -> list[ScreeningEvent]:
+    ) -> list[Sighting]:
         """Fetch the homepage and parse its embedded screenings.
 
-        Mapping is structured (no LLM), so the events are produced at once and
-        reported in a single batch for the progress display.
+        Mapping is structured (no LLM), so the sightings are produced at once
+        and reported in a single batch for the progress display.
 
         Args:
             client: Shared async HTTP client used for the request.
             reporter: Progress reporter for live display.
 
         Returns:
-            One :class:`ScreeningEvent` per screening on the homepage.
+            One :class:`Sighting` per screening on the homepage.
         """
         response = await client.get(_INDEX_URL)
         response.raise_for_status()
-        events = self.parse_events(response.text)
-        reporter.events_fetched(self.source.value, len(events))
-        for _ in events:
+        sightings = self.parse_events(response.text)
+        reporter.events_fetched(self.source.value, len(sightings))
+        for _ in sightings:
             reporter.event_processed(self.source.value)
-        return events
+        return sightings
 
     @staticmethod
     def _decode_rsc(html: str) -> str:
@@ -137,21 +137,21 @@ def _scan_array(text: str, start: int) -> str | None:
     return None
 
 
-def _movie_events(movie: dict[str, Any]) -> Iterator[ScreeningEvent]:
-    """Yield one event per valid show of a film, skipping malformed shows."""
+def _movie_events(movie: dict[str, Any]) -> Iterator[Sighting]:
+    """Yield one sighting per valid show of a film, skipping malformed shows."""
     title = movie.get("title")
     if not isinstance(title, str):
         return
     for show in movie.get("shows") or []:
-        event = _show_event(title, movie.get("synopsis"), show)
-        if event is not None:
-            yield event
+        sighting = _show_sighting(title, movie.get("synopsis"), show)
+        if sighting is not None:
+            yield sighting
 
 
-def _show_event(
+def _show_sighting(
     title: str, synopsis: str | None, show: dict[str, Any]
-) -> ScreeningEvent | None:
-    """Map one show to a ScreeningEvent, or None if essential fields are absent."""
+) -> Sighting | None:
+    """Map one show to a Sighting, or None if essential fields are absent."""
     starts_at = _parse_datetime(show.get("date"))
     venue = (show.get("cinemas") or {}).get("name")
     if starts_at is None or not isinstance(venue, str):
@@ -165,8 +165,8 @@ def _show_event(
         description=synopsis if isinstance(synopsis, str) else None,
     )
     source_url = show.get("linkShow")
-    return ScreeningEvent.from_extracted(
-        extracted,
+    return Sighting(
+        extracted=extracted,
         source=Source.PREMIERE_PROJO,
         source_url=source_url if isinstance(source_url, str) else _INDEX_URL,
     )

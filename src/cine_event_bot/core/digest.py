@@ -46,9 +46,13 @@ def _day_label(event: ScreeningEvent) -> str:
 
 
 def _event_line(event: ScreeningEvent) -> str:
-    """Format one screening as a digest bullet line."""
-    title = event.title
-    if event.release_year:
-        title = f"{title} ({event.release_year})"
+    """Format one screening as a digest bullet line.
+
+    Expects the event's ``film`` and ``venue`` relationships to be loaded
+    (repository queries eager-load them).
+    """
+    title = event.film.title
+    if event.film.release_year:
+        title = f"{title} ({event.film.release_year})"
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
-    return f"• {french_time(event.starts_at)} — {title} · {event.venue}{suffix}"
+    return f"• {french_time(event.starts_at)} — {title} · {event.venue.name}{suffix}"
