@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.models import EventType, Sighting, Source
 from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
 
@@ -34,46 +34,48 @@ def _show(**overrides: Any) -> dict[str, Any]:
     return show
 
 
-def _by_title(events: list[ScreeningEvent]) -> dict[str, ScreeningEvent]:
-    return {event.title: event for event in events}
+def _by_title(sightings: list[Sighting]) -> dict[str, Sighting]:
+    return {sighting.extracted.title: sighting for sighting in sightings}
 
 
-def test_parse_events_maps_each_show_to_an_event() -> None:
+def test_parse_events_maps_each_show_to_a_sighting() -> None:
     scraper = PremiereProjoScraper()
 
-    events = scraper.parse_events(_fixture("premiereprojo_home.html"))
+    sightings = scraper.parse_events(_fixture("premiereprojo_home.html"))
 
-    assert {event.title for event in events} == {"Tempura", "Agon"}
-    assert all(event.source is Source.PREMIERE_PROJO for event in events)
-    assert all(event.event_type is EventType.AVANT_PREMIERE for event in events)
+    assert {s.extracted.title for s in sightings} == {"Tempura", "Agon"}
+    assert all(s.source is Source.PREMIERE_PROJO for s in sightings)
+    assert all(s.extracted.event_type is EventType.AVANT_PREMIERE for s in sightings)
 
 
 def test_parse_events_flags_team_presence_from_avpe() -> None:
     scraper = PremiereProjoScraper()
 
-    events = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
+    sightings = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
 
-    assert events["Tempura"].has_team_present is True  # avpType AVPE
-    assert events["Agon"].has_team_present is False  # avpType AVP
+    assert sightings["Tempura"].extracted.has_team_present is True  # avpType AVPE
+    assert sightings["Agon"].extracted.has_team_present is False  # avpType AVP
 
 
 def test_parse_events_converts_start_time_to_utc() -> None:
     scraper = PremiereProjoScraper()
 
-    events = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
+    sightings = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
 
     # 2026-07-07T16:30:00+02:00 -> 14:30 UTC
-    assert events["Tempura"].starts_at == datetime(2026, 7, 7, 14, 30, tzinfo=UTC)
+    assert sightings["Tempura"].extracted.starts_at == datetime(
+        2026, 7, 7, 14, 30, tzinfo=UTC
+    )
 
 
 def test_parse_events_uses_cinema_name_and_ticket_link() -> None:
     scraper = PremiereProjoScraper()
 
-    events = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
+    sightings = _by_title(scraper.parse_events(_fixture("premiereprojo_home.html")))
 
-    assert events["Tempura"].venue == "MK2 Bibliothèque"
-    assert events["Tempura"].source_url is not None
-    assert "sessionId=136127" in events["Tempura"].source_url
+    assert sightings["Tempura"].extracted.venue == "MK2 Bibliothèque"
+    assert sightings["Tempura"].source_url is not None
+    assert "sessionId=136127" in sightings["Tempura"].source_url
 
 
 def test_parse_events_returns_empty_when_payload_absent() -> None:
@@ -96,9 +98,9 @@ def test_parse_events_skips_shows_with_missing_or_invalid_fields() -> None:
         }
     }
 
-    events = scraper.parse_events(_rsc_html(state))
+    sightings = scraper.parse_events(_rsc_html(state))
 
-    assert [event.title for event in events] == ["Valid"]
+    assert [s.extracted.title for s in sightings] == ["Valid"]
 
 
 def test_parse_events_ignores_unrelated_data_arrays() -> None:
@@ -108,9 +110,9 @@ def test_parse_events_ignores_unrelated_data_arrays() -> None:
         "state": {"data": [{"title": "Valid", "shows": [_show()]}]},
     }
 
-    events = scraper.parse_events(_rsc_html(state))
+    sightings = scraper.parse_events(_rsc_html(state))
 
-    assert [event.title for event in events] == ["Valid"]
+    assert [s.extracted.title for s in sightings] == ["Valid"]
 
 
 async def test_fetch_events_reads_the_homepage() -> None:
@@ -121,7 +123,7 @@ async def test_fetch_events_reads_the_homepage() -> None:
     client = MagicMock()
     client.get = AsyncMock(return_value=response)
 
-    events = await scraper.fetch_events(client, NullReporter())
+    sightings = await scraper.fetch_events(client, NullReporter())
 
-    assert len(events) == 2
+    assert len(sightings) == 2
     client.get.assert_awaited_once()

@@ -30,6 +30,7 @@ cp .env.example .env   # fill TELEGRAM_BOT_TOKEN, TMDB_API_KEY, OLLAMA_BASE_URL,
 uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
 uv run cine-event-bot stats           # summary of stored events
 uv run cine-event-bot weekly-digest   # broadcast the week's digest
+uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
 uv run cine-event-bot run-bot         # start the Telegram bot
 ```
 

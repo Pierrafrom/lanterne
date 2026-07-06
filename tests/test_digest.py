@@ -2,28 +2,9 @@
 
 from datetime import UTC, datetime
 
+from factories import make_display_event
+
 from cine_event_bot.core.digest import build_digest
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
-
-
-def _event(
-    *,
-    title: str,
-    starts_at: datetime,
-    has_team_present: bool = False,
-    release_year: int | None = None,
-    venue: str = "Le Grand Rex",
-) -> ScreeningEvent:
-    return ScreeningEvent(
-        dedup_key=f"{title}-{starts_at.isoformat()}",
-        title=title,
-        event_type=EventType.AVANT_PREMIERE,
-        venue=venue,
-        starts_at=starts_at,
-        has_team_present=has_team_present,
-        release_year=release_year,
-        source=Source.PREMIERE_PROJO,
-    )
 
 
 def test_build_digest_without_events_is_explicit() -> None:
@@ -34,7 +15,7 @@ def test_build_digest_without_events_is_explicit() -> None:
 
 def test_build_digest_lists_title_venue_and_paris_time() -> None:
     # 18:30 UTC in July = 20h30 Paris (UTC+2).
-    event = _event(
+    event = make_display_event(
         title="Dune",
         starts_at=datetime(2026, 7, 7, 18, 30, tzinfo=UTC),
         venue="Le Grand Rex",
@@ -49,7 +30,7 @@ def test_build_digest_lists_title_venue_and_paris_time() -> None:
 
 
 def test_build_digest_flags_team_presence_and_release_year() -> None:
-    event = _event(
+    event = make_display_event(
         title="Soudain",
         starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
         has_team_present=True,
@@ -63,8 +44,12 @@ def test_build_digest_flags_team_presence_and_release_year() -> None:
 
 
 def test_build_digest_groups_by_day_in_chronological_order() -> None:
-    later = _event(title="Later", starts_at=datetime(2026, 7, 9, 17, 0, tzinfo=UTC))
-    earlier = _event(title="Earlier", starts_at=datetime(2026, 7, 7, 17, 0, tzinfo=UTC))
+    later = make_display_event(
+        title="Later", starts_at=datetime(2026, 7, 9, 17, 0, tzinfo=UTC)
+    )
+    earlier = make_display_event(
+        title="Earlier", starts_at=datetime(2026, 7, 7, 17, 0, tzinfo=UTC)
+    )
 
     message = build_digest([later, earlier])
 
@@ -73,7 +58,9 @@ def test_build_digest_groups_by_day_in_chronological_order() -> None:
 
 
 def test_build_digest_handles_round_hour_without_minutes() -> None:
-    event = _event(title="Film", starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC))
+    event = make_display_event(
+        title="Film", starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC)
+    )
 
     message = build_digest([event])
 
@@ -84,7 +71,7 @@ def test_build_digest_handles_round_hour_without_minutes() -> None:
 def test_build_digest_treats_naive_datetime_as_utc() -> None:
     # SQLite hands datetimes back without tzinfo; they must be read as UTC.
     naive = datetime(2026, 7, 7, 18, 0)  # noqa: DTZ001 — simulating a SQLite read
-    event = _event(title="Film", starts_at=naive)
+    event = make_display_event(title="Film", starts_at=naive)
 
     message = build_digest([event])
 

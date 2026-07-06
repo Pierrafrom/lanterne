@@ -9,7 +9,7 @@ the scraper reads the index for the links, then each detail page for the text.
 import httpx
 from bs4 import BeautifulSoup, Tag
 
-from cine_event_bot.core.models import ScreeningEvent, Source
+from cine_event_bot.core.models import Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.io.scrapers.base import RawListing, gather_events, structure_via_llm
@@ -90,8 +90,8 @@ class CinemathequeScraper:
 
     async def fetch_events(
         self, client: httpx.AsyncClient, reporter: ProgressReporter
-    ) -> list[ScreeningEvent]:
-        """Fetch the index then each detail page, structured into events.
+    ) -> list[Sighting]:
+        """Fetch the index then each detail page, structured into sightings.
 
         Detail pages are fetched and structured concurrently (bounded); progress
         is reported per screening. A listing whose extraction fails is logged and
@@ -102,13 +102,13 @@ class CinemathequeScraper:
             reporter: Progress reporter for live display.
 
         Returns:
-            One unpersisted :class:`ScreeningEvent` per successfully extracted
-            screening linked from the index.
+            One :class:`Sighting` per successfully extracted screening linked
+            from the index.
         """
         index_html = await _fetch_text(client, _INDEX_URL)
         urls = self.parse_index(index_html)
 
-        async def extract(url: str) -> ScreeningEvent | None:
+        async def extract(url: str) -> Sighting | None:
             detail_html = await _fetch_text(client, url)
             listing = self.parse_detail(detail_html, url)
             return await structure_via_llm(self._extractor, listing)

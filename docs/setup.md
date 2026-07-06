@@ -74,6 +74,7 @@ uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
 uv run cine-event-bot stats           # summary of stored events
 uv run cine-event-bot weekly-digest   # broadcast the week's digest
 uv run cine-event-bot run-bot         # start the Telegram bot
+uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
 uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
 uv run cine-event-bot --help          # list every command
 ```
@@ -88,6 +89,26 @@ want a truly empty database.
 `run-bot` answers `/start` (subscribe), `/stop` (unsubscribe), and any other
 message as a natural-language question. Schedule `scrape` and `weekly-digest`
 with cron (or any scheduler) for unattended operation.
+
+## Database schema, migrations, and backups
+
+Every CLI command creates or upgrades the schema automatically by running the
+**Alembic** migrations (`migrations/`) before touching the database — a fresh
+checkout needs no manual step. Run the CLI from the repository root: the
+migration configuration is read from `alembic.ini` and `pyproject.toml` there.
+
+When you change a model in `core/models.py`, generate the migration alongside
+it (never edit the schema by hand):
+
+```fish
+uv run alembic revision --autogenerate -m "describe the change"
+uv run alembic upgrade head   # or just run any CLI command
+```
+
+File-backed databases run in SQLite **WAL mode**, so the polling bot and the
+scrape cron can work concurrently. `backup-db` snapshots the live database with
+`VACUUM INTO` (consistent even while the bot runs) into a timestamped file —
+schedule it next to the weekly scrape.
 
 ## Docker
 

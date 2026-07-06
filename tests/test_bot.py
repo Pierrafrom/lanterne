@@ -3,9 +3,10 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
+from factories import make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.models import EventType, Source
 from cine_event_bot.core.qa import QueryCriteria
 from cine_event_bot.io.bot import (
     broadcast,
@@ -60,9 +61,8 @@ async def test_handle_question_interprets_searches_and_formats(
     session: AsyncSession,
 ) -> None:
     repository = EventRepository(session)
-    await repository.add(
-        ScreeningEvent(
-            dedup_key="k",
+    await repository.ingest(
+        make_sighting(
             title="Le Voyage de Chihiro",
             event_type=EventType.RETROSPECTIVE,
             venue="La Cinémathèque française",

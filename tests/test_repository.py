@@ -2,32 +2,28 @@
 
 from datetime import UTC, datetime
 
+from factories import make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, ScreeningEvent, Source
+from cine_event_bot.core.models import ScreeningEvent
 from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 
 
-def _event(dedup_key: str, starts_at: datetime) -> ScreeningEvent:
-    return ScreeningEvent(
-        dedup_key=dedup_key,
-        title="Dune",
-        event_type=EventType.AVANT_PREMIERE,
-        venue="Le Grand Rex",
-        starts_at=starts_at,
-        source=Source.PREMIERE_PROJO,
-    )
+async def _ingest(
+    repo: EventRepository, *, title: str = "Dune", starts_at: datetime
+) -> ScreeningEvent:
+    return await repo.ingest(make_sighting(title=title, starts_at=starts_at))
 
 
-async def test_add_then_get_by_dedup_key_roundtrip(session: AsyncSession) -> None:
+async def test_ingest_then_get_by_dedup_key_roundtrip(session: AsyncSession) -> None:
     repo = EventRepository(session)
     moment = datetime(2026, 7, 1, 20, 30, tzinfo=UTC)
 
-    await repo.add(_event("key-1", moment))
-    found = await repo.get_by_dedup_key("key-1")
+    stored = await _ingest(repo, starts_at=moment)
+    found = await repo.get_by_dedup_key(stored.dedup_key)
 
     assert found is not None
-    assert found.title == "Dune"
+    assert found.film.title == "Dune"
 
 
 async def test_get_by_dedup_key_returns_none_when_absent(
@@ -41,9 +37,9 @@ async def test_get_by_dedup_key_returns_none_when_absent(
 async def test_starts_at_round_trips_as_utc_aware(session: AsyncSession) -> None:
     repo = EventRepository(session)
     moment = datetime(2026, 7, 7, 18, 30, tzinfo=UTC)
-    await repo.add(_event("tz", moment))
+    stored = await _ingest(repo, starts_at=moment)
 
-    found = await repo.get_by_dedup_key("tz")
+    found = await repo.get_by_dedup_key(stored.dedup_key)
 
     assert found is not None
     assert found.starts_at.tzinfo is not None  # not naive (SQLite default)
@@ -52,29 +48,39 @@ async def test_starts_at_round_trips_as_utc_aware(session: AsyncSession) -> None
 
 async def test_list_between_filters_on_start_time(session: AsyncSession) -> None:
     repo = EventRepository(session)
-    await repo.add(_event("inside", datetime(2026, 7, 2, 20, 0, tzinfo=UTC)))
-    await repo.add(_event("before", datetime(2026, 6, 1, 20, 0, tzinfo=UTC)))
-    await repo.add(_event("after", datetime(2026, 8, 1, 20, 0, tzinfo=UTC)))
+    await _ingest(
+        repo, title="Inside", starts_at=datetime(2026, 7, 2, 20, 0, tzinfo=UTC)
+    )
+    await _ingest(
+        repo, title="Before", starts_at=datetime(2026, 6, 1, 20, 0, tzinfo=UTC)
+    )
+    await _ingest(
+        repo, title="After", starts_at=datetime(2026, 8, 1, 20, 0, tzinfo=UTC)
+    )
 
     window = await repo.list_between(
         datetime(2026, 7, 1, tzinfo=UTC),
         datetime(2026, 7, 8, tzinfo=UTC),
     )
 
-    assert [event.dedup_key for event in window] == ["inside"]
+    assert [event.film.title for event in window] == ["Inside"]
 
 
 async def test_list_between_orders_by_start_time(session: AsyncSession) -> None:
     repo = EventRepository(session)
-    await repo.add(_event("later", datetime(2026, 7, 5, 20, 0, tzinfo=UTC)))
-    await repo.add(_event("sooner", datetime(2026, 7, 2, 20, 0, tzinfo=UTC)))
+    await _ingest(
+        repo, title="Later", starts_at=datetime(2026, 7, 5, 20, 0, tzinfo=UTC)
+    )
+    await _ingest(
+        repo, title="Sooner", starts_at=datetime(2026, 7, 2, 20, 0, tzinfo=UTC)
+    )
 
     window = await repo.list_between(
         datetime(2026, 7, 1, tzinfo=UTC),
         datetime(2026, 7, 8, tzinfo=UTC),
     )
 
-    assert [event.dedup_key for event in window] == ["sooner", "later"]
+    assert [event.film.title for event in window] == ["Sooner", "Later"]
 
 
 async def test_stats_on_empty_database(session: AsyncSession) -> None:
@@ -86,14 +92,19 @@ async def test_stats_on_empty_database(session: AsyncSession) -> None:
 
 async def test_stats_summarizes_stored_events(session: AsyncSession) -> None:
     repo = EventRepository(session)
-    await repo.add(_event("a", datetime(2026, 7, 1, 20, 0, tzinfo=UTC)))
-    await repo.add(_event("b", datetime(2026, 7, 5, 20, 0, tzinfo=UTC)))
+    first = await _ingest(repo, starts_at=datetime(2026, 7, 1, 20, 0, tzinfo=UTC))
+    await _ingest(repo, starts_at=datetime(2026, 7, 5, 20, 0, tzinfo=UTC))
+    first.film.tmdb_id = 693134
+    await repo.save_film(first.film)
 
     stats = await repo.stats()
 
     assert stats.total == 2
+    # by_source counts sightings, one per (event, source) pair.
     assert stats.by_source == {"premiereprojo.fr": 2}
     assert stats.by_type == {"avant_premiere": 2}
+    # Both screenings share the film row, so its TMDB match counts for both.
+    assert stats.enriched == 2
     # SQLite returns datetimes timezone-naive; only ordering and date matter here.
     assert stats.first_starts_at is not None
     assert stats.last_starts_at is not None

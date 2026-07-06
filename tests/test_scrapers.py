@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, ScreeningEvent, Source
+from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
 from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers import CinemathequeScraper, build_scrapers
 from cine_event_bot.io.scrapers.base import SourceScraper
@@ -77,7 +77,7 @@ def test_parse_detail_gathers_venue_cycle_date_and_film() -> None:
     assert "Ciao, professore!" in listing.raw_text
 
 
-async def test_fetch_events_structures_each_listing_into_an_event() -> None:
+async def test_fetch_events_structures_each_listing_into_a_sighting() -> None:
     extractor = _extractor_returning(_sample_extracted())
     scraper = CinemathequeScraper(extractor)
     detail_html = _fixture("cinematheque_seance.html")
@@ -90,12 +90,12 @@ async def test_fetch_events_structures_each_listing_into_an_event() -> None:
         ]
     )
 
-    events = await scraper.fetch_events(client, NullReporter())
+    sightings = await scraper.fetch_events(client, NullReporter())
 
-    assert len(events) == 2
-    assert all(isinstance(event, ScreeningEvent) for event in events)
-    assert events[0].source is Source.CINEMATHEQUE
-    assert events[0].title == "Ciao, professore!"
+    assert len(sightings) == 2
+    assert all(isinstance(sighting, Sighting) for sighting in sightings)
+    assert sightings[0].source is Source.CINEMATHEQUE
+    assert sightings[0].extracted.title == "Ciao, professore!"
     assert extractor.extract.await_count == 2
 
 

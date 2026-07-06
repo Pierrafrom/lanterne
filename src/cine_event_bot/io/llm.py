@@ -31,7 +31,9 @@ _SYSTEM_PROMPT = (
     "or cast attend. Parse the screening date and time into an absolute UTC "
     "datetime; if the text gives a day and month without a year, use the "
     "reference date stated in the text to pick the next upcoming occurrence. "
-    "Use the exact venue name as written."
+    "Use the exact venue name as written. Set cycle_name to the retrospective "
+    "or festival cycle the screening belongs to when the text announces one, "
+    "otherwise leave it null."
 )
 
 

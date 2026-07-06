@@ -14,8 +14,19 @@ import hashlib
 from datetime import datetime
 
 
-def _normalize(text: str) -> str:
-    """Lower-case and collapse surrounding whitespace for stable comparison."""
+def normalize_text(text: str) -> str:
+    """Lower-case and collapse whitespace for stable comparison.
+
+    Shared by the dedup key and by the natural keys of :class:`Film`
+    (``title_key``) and :class:`Venue` (``slug``), so "Le Grand Rex" and
+    "le  grand rex" resolve to the same row.
+
+    Args:
+        text: Scraped text to normalize.
+
+    Returns:
+        The lower-cased text with runs of whitespace collapsed to one space.
+    """
     return " ".join(text.lower().split())
 
 
@@ -34,5 +45,5 @@ def compute_dedup_key(title: str, venue: str, starts_at: datetime) -> str:
     Returns:
         A hexadecimal SHA-256 digest used as the unique key in storage.
     """
-    raw = f"{_normalize(title)}|{_normalize(venue)}|{starts_at.isoformat()}"
+    raw = f"{normalize_text(title)}|{normalize_text(venue)}|{starts_at.isoformat()}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
