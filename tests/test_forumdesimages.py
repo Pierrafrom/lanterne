@@ -1,6 +1,6 @@
 """Tests for the Forum des images scraper (classic HTML + LLM)."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -27,7 +27,8 @@ def _sample_extracted() -> ExtractedEvent:
         title="Mulholland Drive",
         event_type=EventType.RETROSPECTIVE,
         venue="Le Forum des images",
-        starts_at=datetime(2026, 7, 9, 17, 30, tzinfo=UTC),
+        # Relative to now: structure_via_llm rejects implausible dates.
+        starts_at=datetime.now(UTC) + timedelta(days=14),
     )
 
 
