@@ -35,9 +35,9 @@ which are validated manually rather than unit-tested.
 | Area                               | Tests                                                                 |
 | ---------------------------------- | --------------------------------------------------------------------- |
 | Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                     |
-| Persistence, dedup upsert, search  | `test_db.py`, `test_repository.py`, `test_upsert.py`                  |
+| Persistence, dedup ingest, search  | `test_db.py`, `test_repository.py`, `test_ingest.py`                  |
 | Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py` |
-| LLM extractor                      | `test_llm.py`                                                         |
+| LLM extractor & guards & eval      | `test_llm.py`, `test_validation.py`, `test_evaluation.py`             |
 | TMDB enrichment                    | `test_tmdb.py`                                                        |
 | Ingestion pipeline                 | `test_pipeline.py`                                                    |
 | Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                        |
@@ -54,3 +54,23 @@ uv run ruff format .      # formatting
 uv run mypy src           # strict type checking
 uv run pytest             # tests + coverage
 ```
+
+## Evaluating the LLM extraction (offline harness)
+
+Unit tests never call the real LLM. To measure the *quality* of the configured
+Ollama model on the extraction task, run the golden-dataset harness (real LLM
+calls, so it needs a reachable `OLLAMA_BASE_URL`):
+
+```fish
+uv run cine-event-bot eval-extraction
+```
+
+It runs the extractor over `eval/golden_extractions.json` (announcement texts
+paired with the expected structured event) and reports per-field accuracy,
+exact-match rate, and mean latency. Run it before and after any model or
+prompt change, and when comparing candidate models.
+
+To grow the dataset, append a case to the JSON file: give it a short unique
+`id`, put in `raw_text` exactly what a scraper would hand the LLM (including a
+`Reference date:` line when the announcement omits the year), and fill
+`expected` with the correct extraction (times in UTC).

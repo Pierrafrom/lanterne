@@ -17,6 +17,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from cine_event_bot.core.evaluation import EvaluationSummary
 from cine_event_bot.io.repository import EventStats
 from cine_event_bot.logging_config import console
 from cine_event_bot.pipeline import IngestionReport
@@ -105,6 +106,38 @@ def print_stats(stats: EventStats) -> None:
         span = f"{stats.first_starts_at:%Y-%m-%d} -> {stats.last_starts_at:%Y-%m-%d}"
         table.add_row("Date range", span)
     console.print(table)
+
+
+def print_evaluation(summary: EvaluationSummary, *, model: str) -> None:
+    """Print an extraction-evaluation report as Rich tables.
+
+    Args:
+        summary: The aggregated evaluation scores.
+        model: Name of the evaluated model, shown in the title.
+    """
+    table = Table(title=f"Extraction evaluation — {model}")
+    table.add_column("Metric")
+    table.add_column("Value")
+    table.add_row("Cases", str(summary.total_cases))
+    table.add_row("Extraction failures", str(summary.failures))
+    table.add_row("Exact matches", f"{summary.exact_match_rate:.0%}")
+    for field, accuracy in summary.field_accuracy.items():
+        table.add_row(f"Field: {field}", f"{accuracy:.0%}")
+    table.add_row("Mean latency", f"{summary.mean_latency_seconds:.1f}s")
+    console.print(table)
+
+    imperfect = [result for result in summary.results if result.mismatches]
+    if not imperfect:
+        return
+    details = Table(title="Mismatches")
+    details.add_column("Case")
+    details.add_column("Field")
+    details.add_column("Expected")
+    details.add_column("Actual")
+    for result in imperfect:
+        for field, (expected, actual) in result.mismatches.items():
+            details.add_row(result.case_id, field, expected, actual)
+    console.print(details)
 
 
 def _as_pairs(counts: dict[str, int]) -> str:

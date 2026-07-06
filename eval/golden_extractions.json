@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "id": "avp-with-team",
+      "raw_text": "Le Grand Rex\nAvant-première : Nouvelle Vague\nSamedi 18 juillet 2026 à 20h00\nProjection en présence du réalisateur et de l'équipe du film, suivie d'une séance de questions-réponses.",
+      "expected": {
+        "title": "Nouvelle Vague",
+        "event_type": "avant_premiere",
+        "venue": "Le Grand Rex",
+        "starts_at": "2026-07-18T18:00:00+00:00",
+        "has_team_present": true,
+        "cycle_name": null
+      }
+    },
+    {
+      "id": "cine-concert",
+      "raw_text": "Le Grand Rex\nCiné-concert : Metropolis de Fritz Lang\nSamedi 12 septembre 2026, 20h00\nLe chef-d'œuvre muet accompagné en direct par un orchestre symphonique de 40 musiciens.",
+      "expected": {
+        "title": "Metropolis",
+        "event_type": "cine_concert",
+        "venue": "Le Grand Rex",
+        "starts_at": "2026-09-12T18:00:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
+    },
+    {
+      "id": "retrospective-with-cycle",
+      "raw_text": "La Cinémathèque française\nRétrospective Lina Wertmüller\njeudi 24 septembre 2026, 18h30\nCiao, professore! de Lina Wertmüller (1992, 99 min, VOSTF)",
+      "expected": {
+        "title": "Ciao, professore!",
+        "event_type": "retrospective",
+        "venue": "La Cinémathèque française",
+        "starts_at": "2026-09-24T16:30:00+00:00",
+        "has_team_present": false,
+        "cycle_name": "Rétrospective Lina Wertmüller"
+      }
+    },
+    {
+      "id": "open-air-yearless-date",
+      "raw_text": "Cinéma en plein air de La Villette\nReference date: 2026-07-06\nMercredi 22 juillet à 22h00\nLes Parapluies de Cherbourg de Jacques Demy, sur la grande pelouse, entrée libre.",
+      "expected": {
+        "title": "Les Parapluies de Cherbourg",
+        "event_type": "open_air",
+        "venue": "Cinéma en plein air de La Villette",
+        "starts_at": "2026-07-22T20:00:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
+    },
+    {
+      "id": "cult-midnight-screening",
+      "raw_text": "Le Champo\nSéance culte d'Halloween : The Rocky Horror Picture Show\nSamedi 31 octobre 2026 à 23h59\nSéance interactive en costumes, accessoires fournis, ambiance garantie jusqu'au bout de la nuit.",
+      "expected": {
+        "title": "The Rocky Horror Picture Show",
+        "event_type": "seance_culte",
+        "venue": "Le Champo",
+        "starts_at": "2026-10-31T22:59:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
+    },
+    {
+      "id": "short-film-programme",
+      "raw_text": "Le Forum des images\nSoirée courts métrages : nouvelle génération du cinéma d'animation français\nSamedi 15 août 2026, 19h00\nProgramme de huit courts métrages d'animation récents, durée totale 1h45.",
+      "expected": {
+        "title": "Soirée courts métrages : nouvelle génération du cinéma d'animation français",
+        "event_type": "court_metrage",
+        "venue": "Le Forum des images",
+        "starts_at": "2026-08-15T17:00:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
+    }
+  ]
+}
