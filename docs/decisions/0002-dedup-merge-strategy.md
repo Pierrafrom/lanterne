@@ -5,9 +5,12 @@
 
 ## Context
 
-The same special screening is regularly announced on more than one of the four
-scraped sources (e.g. an avant-première listed on both premiereprojo.fr and
-sortiraparis.com). The weekly digest must show it once, not four times.
+The same special screening is regularly announced on more than one scraped
+source (e.g. an avant-première listed on both premiereprojo.fr and the
+Cinémathèque). The weekly digest must show it once, not once per source.
+
+> Note: this ADR was written when four sources were planned; the MVP now ships
+> three (see [ADR 0005](0005-drop-sortiraparis.md)). The strategy is unchanged.
 
 ADR 0001 established a deterministic `dedup_key` derived from a screening's
 intrinsic identity (film + venue + start time). What remains is the *merge
