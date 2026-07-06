@@ -7,6 +7,7 @@ while the internals remain fully async.
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import typer
@@ -65,7 +66,7 @@ async def _run_ingestion() -> IngestionReport:
     """Wire settings, database, scrapers, and pipeline for one scrape run."""
     settings = Settings()
     database = Database(settings.database_url)
-    await database.create_tables()
+    await database.migrate_to_head()
     scrapers = build_scrapers(build_extractor(settings))
     try:
         async with (
@@ -94,7 +95,7 @@ async def _load_stats() -> EventStats:
     """Open the database and compute the event statistics."""
     settings = Settings()
     database = Database(settings.database_url)
-    await database.create_tables()
+    await database.migrate_to_head()
     try:
         async with database.session() as session:
             return await EventRepository(session).stats()
@@ -125,6 +126,30 @@ async def _reset_db() -> None:
         await database.dispose()
 
 
+@app.command(name="backup-db")
+def backup_db(
+    output_dir: Path = typer.Option(  # noqa: B008 — Typer reads options from defaults
+        Path("backups"), "--output-dir", "-o", help="Directory for the snapshot."
+    ),
+) -> None:
+    """Write a timestamped snapshot of the database (safe while the bot runs)."""
+    target = asyncio.run(_backup_db(output_dir))
+    typer.echo(f"Backup written to {target}.")
+
+
+async def _backup_db(output_dir: Path) -> Path:
+    """Snapshot the database into a timestamped file under ``output_dir``."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    target = output_dir / f"cine-event-bot-{stamp}.db"
+    database = Database(Settings().database_url)
+    try:
+        await database.backup_to(target)
+    finally:
+        await database.dispose()
+    return target
+
+
 @app.command(name="weekly-digest")
 def weekly_digest() -> None:
     """Send the upcoming week's digest to every active subscriber."""
@@ -136,7 +161,7 @@ async def _run_weekly_digest() -> int:
     """Build the next-7-days digest and broadcast it to active subscribers."""
     settings = Settings()
     database = Database(settings.database_url)
-    await database.create_tables()
+    await database.migrate_to_head()
     now = datetime.now(UTC)
     bot = Bot(settings.telegram_bot_token)
     try:
@@ -162,7 +187,7 @@ async def _run_bot() -> None:
     """Wire the database and dispatcher, then poll Telegram until stopped."""
     settings = Settings()
     database = Database(settings.database_url)
-    await database.create_tables()
+    await database.migrate_to_head()
     bot = Bot(settings.telegram_bot_token)
     dispatcher = build_dispatcher(database, build_interpreter(settings))
     print_banner("cine-event-bot is polling Telegram - press Ctrl-C to stop")
