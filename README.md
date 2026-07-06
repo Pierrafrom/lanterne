@@ -1,7 +1,9 @@
 # cine-event-bot
 
 Self-hosted Telegram bot that aggregates **special screenings** in Paris/IDF —
-avant-premières (with the film team), ciné-concerts, retrospectives, open-air —
+avant-premières (with the film team), ciné-concerts, retrospectives,
+open-air, festivals, cult/midnight screenings, ciné-clubs, short-film
+programmes —
 from three scraped sources, enriches them with TMDB data, sends a **weekly
 digest**, and answers **natural-language questions** about programmed films.
 

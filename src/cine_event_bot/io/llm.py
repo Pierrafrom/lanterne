@@ -13,7 +13,7 @@ import instructor
 from openai import AsyncOpenAI
 
 from cine_event_bot.config import Settings
-from cine_event_bot.core.models import ExtractedEvent
+from cine_event_bot.core.models import EventType, ExtractedEvent
 from cine_event_bot.core.qa import QueryCriteria
 
 # One reformatting retry on a validation error, then give up: a weak local model
@@ -21,12 +21,27 @@ from cine_event_bot.core.qa import QueryCriteria
 # it within a few tries, so more retries just multiply the slow LLM calls.
 _MAX_RETRIES = 1
 
+# One guidance entry per EventType member — a test asserts full coverage, so a
+# new category cannot be added to the enum without also teaching the prompts.
+_EVENT_TYPE_GUIDE: dict[EventType, str] = {
+    EventType.AVANT_PREMIERE: "preview ahead of release, often with the film team",
+    EventType.CINE_CONCERT: "film with live music",
+    EventType.RETROSPECTIVE: "heritage/repertory cycle",
+    EventType.OPEN_AIR: "outdoor screening",
+    EventType.FESTIVAL: "part of a film festival programme",
+    EventType.SEANCE_CULTE: "cult or midnight screening, themed night, marathon",
+    EventType.CINE_CLUB: "film-club screening with an introduction or discussion",
+    EventType.COURT_METRAGE: "short-film programme",
+}
+
+_TYPE_CHOICES = ", ".join(
+    f"{member.value} ({guide})" for member, guide in _EVENT_TYPE_GUIDE.items()
+)
+
 _SYSTEM_PROMPT = (
     "You extract structured data about a single special cinema screening in "
     "the Paris region from the announcement text given by the user. "
-    "Classify event_type as one of: avant_premiere (preview, especially with "
-    "the film team present), cine_concert (film with live music), "
-    "retrospective (heritage/repertory cycle), open_air (outdoor screening). "
+    f"Classify event_type as one of: {_TYPE_CHOICES}. "
     "Set has_team_present to true only when the text states that the director "
     "or cast attend. Parse the screening date and time into an absolute UTC "
     "datetime; if the text gives a day and month without a year, use the "
@@ -79,8 +94,9 @@ _QA_SYSTEM_PROMPT = (
     "You translate a user's French question about upcoming special cinema "
     "screenings into a structured filter. Leave a field null when the question "
     "does not constrain it. text_query holds film/director/keyword terms to "
-    "match (or null for a broad question). event_type is one of avant_premiere, "
-    "cine_concert, retrospective, open_air, or null. Set team_only to true only "
+    "match (or null for a broad question). event_type is one of "
+    f"{', '.join(member.value for member in EventType)}, or null. "
+    "Set team_only to true only "
     "if the user asks for screenings with the film team present. Resolve "
     'relative time phrases ("this weekend", "soon", "tonight") into '
     "absolute UTC starts_after/starts_before bounds using the reference date "

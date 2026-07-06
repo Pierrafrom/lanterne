@@ -8,7 +8,32 @@ locale-based ``strftime`` is unreliable, so the names are tabled explicitly).
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from cine_event_bot.core.models import EventType
+
 _PARIS = ZoneInfo("Europe/Paris")
+
+_EVENT_TYPE_LABELS: dict[EventType, str] = {
+    EventType.AVANT_PREMIERE: "Avant-première",
+    EventType.CINE_CONCERT: "Ciné-concert",
+    EventType.RETROSPECTIVE: "Rétrospective",
+    EventType.OPEN_AIR: "Plein air",
+    EventType.FESTIVAL: "Festival",
+    EventType.SEANCE_CULTE: "Séance culte",
+    EventType.CINE_CLUB: "Ciné-club",
+    EventType.COURT_METRAGE: "Courts métrages",
+}
+
+
+def event_type_label(event_type: EventType) -> str:
+    """Return the French display label of a screening category.
+
+    Args:
+        event_type: The category to label.
+
+    Returns:
+        The label shown to users in the digest and Q&A answers.
+    """
+    return _EVENT_TYPE_LABELS[event_type]
 
 
 def _to_paris(moment: datetime) -> datetime:

@@ -67,12 +67,21 @@ class UtcDateTime(TypeDecorator[datetime]):
 
 
 class EventType(StrEnum):
-    """Category of special screening tracked by the bot."""
+    """Category of special screening tracked by the bot.
+
+    Stored as plain text in SQLite, so adding a member needs no migration;
+    the extraction and Q&A prompts and the French labels are generated from
+    this enum (guarded by tests), so they follow automatically.
+    """
 
     AVANT_PREMIERE = "avant_premiere"
     CINE_CONCERT = "cine_concert"
     RETROSPECTIVE = "retrospective"
     OPEN_AIR = "open_air"
+    FESTIVAL = "festival"
+    SEANCE_CULTE = "seance_culte"
+    CINE_CLUB = "cine_club"
+    COURT_METRAGE = "court_metrage"
 
 
 class Source(StrEnum):

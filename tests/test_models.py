@@ -12,6 +12,19 @@ def test_source_enum_carries_domain_url() -> None:
     assert Source.FORUM_DES_IMAGES.value == "forumdesimages.fr"
 
 
+def test_event_type_covers_every_tracked_category() -> None:
+    assert {member.value for member in EventType} == {
+        "avant_premiere",
+        "cine_concert",
+        "retrospective",
+        "open_air",
+        "festival",
+        "seance_culte",
+        "cine_club",
+        "court_metrage",
+    }
+
+
 def test_extracted_event_requires_core_fields() -> None:
     extracted = make_extracted(has_team_present=True)
 

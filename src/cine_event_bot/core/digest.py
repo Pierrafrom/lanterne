@@ -11,7 +11,7 @@ local time via :mod:`cine_event_bot.core.frenchfmt`.
 from collections.abc import Sequence
 from itertools import groupby
 
-from cine_event_bot.core.frenchfmt import french_date, french_time
+from cine_event_bot.core.frenchfmt import event_type_label, french_date, french_time
 from cine_event_bot.core.models import ScreeningEvent
 
 _HEADER = "🎬 Séances spéciales de la semaine"
@@ -54,5 +54,9 @@ def _event_line(event: ScreeningEvent) -> str:
     title = event.film.title
     if event.film.release_year:
         title = f"{title} ({event.film.release_year})"
+    label = event_type_label(event.event_type)
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
-    return f"• {french_time(event.starts_at)} — {title} · {event.venue.name}{suffix}"
+    return (
+        f"• {french_time(event.starts_at)} — {title} · "
+        f"{event.venue.name} · {label}{suffix}"
+    )

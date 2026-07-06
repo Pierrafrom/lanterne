@@ -12,7 +12,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from cine_event_bot.core.frenchfmt import french_date, french_time
+from cine_event_bot.core.frenchfmt import event_type_label, french_date, french_time
 from cine_event_bot.core.models import EventType, ScreeningEvent
 
 _NO_MATCH = "Je n'ai trouvé aucune séance correspondante."
@@ -66,6 +66,7 @@ def _answer_line(event: ScreeningEvent) -> str:
     title = event.film.title
     if event.film.release_year:
         title = f"{title} ({event.film.release_year})"
+    label = event_type_label(event.event_type)
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
     when = f"{french_date(event.starts_at)} à {french_time(event.starts_at)}"
-    return f"• {when} — {title} · {event.venue.name}{suffix}"
+    return f"• {when} — {title} · {event.venue.name} · {label}{suffix}"
