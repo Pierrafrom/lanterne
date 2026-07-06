@@ -4,13 +4,17 @@ __pycache__/
 venv/
 .env
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+backups/
 logs/*.jsonl
 !logs/.gitkeep
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.codegraph/
 *.egg-info/
 dist/
 build/
