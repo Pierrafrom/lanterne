@@ -1,6 +1,6 @@
 """Tests for the scraper architecture and the Cinémathèque scraper."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -27,7 +27,8 @@ def _sample_extracted() -> ExtractedEvent:
         title="Ciao, professore!",
         event_type=EventType.RETROSPECTIVE,
         venue="La Cinémathèque française",
-        starts_at=datetime(2026, 6, 25, 18, 30, tzinfo=UTC),
+        # Relative to now: structure_via_llm rejects implausible dates.
+        starts_at=datetime.now(UTC) + timedelta(days=14),
     )
 
 
@@ -116,3 +117,27 @@ async def test_fetch_events_skips_listings_whose_extraction_fails() -> None:
     events = await scraper.fetch_events(client, NullReporter())
 
     assert events == []
+
+
+async def test_fetch_events_drops_implausible_extractions() -> None:
+    # A hallucinated past date must be rejected by the validation guards.
+    stale = ExtractedEvent(
+        title="Ciao, professore!",
+        event_type=EventType.RETROSPECTIVE,
+        venue="La Cinémathèque française",
+        starts_at=datetime.now(UTC) - timedelta(days=30),
+    )
+    scraper = CinemathequeScraper(_extractor_returning(stale))
+    detail_html = _fixture("cinematheque_seance.html")
+    client = MagicMock()
+    client.get = AsyncMock(
+        side_effect=[
+            _response(_fixture("cinematheque_index.html")),
+            _response(detail_html),
+            _response(detail_html),
+        ]
+    )
+
+    sightings = await scraper.fetch_events(client, NullReporter())
+
+    assert sightings == []

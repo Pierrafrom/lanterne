@@ -14,12 +14,14 @@ and registering it (see ``io/scrapers/__init__.py``); nothing else changes.
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol, TypeVar, runtime_checkable
 
 import httpx
 
 from cine_event_bot.core.models import Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
+from cine_event_bot.core.validation import find_extraction_issues
 from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.logging_config import get_logger
 
@@ -56,15 +58,18 @@ async def structure_via_llm(
 ) -> Sighting | None:
     """Structure one raw listing into a sighting via the LLM.
 
-    Shared by every text-based scraper: a listing whose extraction fails is
-    logged and skipped (returns None) so one bad listing never aborts a run.
+    Shared by every text-based scraper: a listing whose extraction fails or
+    yields implausible values (hallucinated date, blank field — see
+    ``core/validation.py``) is logged and skipped (returns None) so one bad
+    listing never aborts a run.
 
     Args:
         extractor: LLM-backed extractor turning listing text into events.
         listing: The raw listing to structure.
 
     Returns:
-        The structured :class:`Sighting`, or None when extraction failed.
+        The structured :class:`Sighting`, or None when extraction failed or
+        was rejected.
     """
     try:
         extracted = await extractor.extract(listing.raw_text)
@@ -72,6 +77,19 @@ async def structure_via_llm(
         logger.exception(
             "llm extraction failed",
             extra={"ctx": {"source": listing.source.value, "url": listing.source_url}},
+        )
+        return None
+    issues = find_extraction_issues(extracted, now=datetime.now(UTC))
+    if issues:
+        logger.warning(
+            "extraction rejected",
+            extra={
+                "ctx": {
+                    "source": listing.source.value,
+                    "url": listing.source_url,
+                    "issues": issues,
+                }
+            },
         )
         return None
     return Sighting(
