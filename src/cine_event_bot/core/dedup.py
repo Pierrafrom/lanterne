@@ -13,21 +13,36 @@ on key collision (insert-or-update) lives in the persistence layer.
 import hashlib
 from datetime import datetime
 
+_APOSTROPHE_VARIANTS = str.maketrans(
+    {
+        "’": "'",  # RIGHT SINGLE QUOTATION MARK — the typographic apostrophe
+        "‘": "'",  # LEFT SINGLE QUOTATION MARK
+        "`": "'",  # GRAVE ACCENT
+        "´": "'",  # ACUTE ACCENT
+    }
+)
+
 
 def normalize_text(text: str) -> str:
-    """Lower-case and collapse whitespace for stable comparison.
+    """Lower-case, unify apostrophes, and collapse whitespace for comparison.
 
     Shared by the dedup key and by the natural keys of :class:`Film`
     (``title_key``) and :class:`Venue` (``slug``), so "Le Grand Rex" and
-    "le  grand rex" resolve to the same row.
+    "le  grand rex" resolve to the same row. French titles are announced with
+    either a straight ``'`` or a typographic ``’`` apostrophe depending on the
+    source (e.g. "L'Écologie" vs "L’Écologie") — treating them as distinct
+    text silently created two `Film` rows for the same title, one of which
+    then collided with the other's TMDB match on the ``tmdb_id`` unique
+    constraint and crashed ingestion.
 
     Args:
         text: Scraped text to normalize.
 
     Returns:
-        The lower-cased text with runs of whitespace collapsed to one space.
+        The lower-cased text, apostrophe variants unified to ``'``, with runs
+        of whitespace collapsed to one space.
     """
-    return " ".join(text.lower().split())
+    return " ".join(text.translate(_APOSTROPHE_VARIANTS).lower().split())
 
 
 def compute_dedup_key(title: str, venue: str, starts_at: datetime) -> str:
