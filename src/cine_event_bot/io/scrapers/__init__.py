@@ -12,6 +12,7 @@ from cine_event_bot.io.scrapers.base import RawListing, SourceScraper
 from cine_event_bot.io.scrapers.cinematheque import CinemathequeScraper
 from cine_event_bot.io.scrapers.fondationpathe import FondationPatheScraper
 from cine_event_bot.io.scrapers.forumdesimages import ForumDesImagesScraper
+from cine_event_bot.io.scrapers.lavillette import LaVilletteScraper
 from cine_event_bot.io.scrapers.lechampo import LeChampoScraper
 from cine_event_bot.io.scrapers.louxor import LeLouxorScraper
 from cine_event_bot.io.scrapers.paris_cine_info import ParisCineInfoScraper
@@ -47,6 +48,7 @@ def build_scrapers(
         LeChampoScraper(extractor),
         LeLouxorScraper(extractor),
         FondationPatheScraper(extractor),
+        LaVilletteScraper(extractor),
     ]
     if paris_cine_info_login and paris_cine_info_password:
         scrapers.append(
@@ -61,6 +63,7 @@ __all__ = [
     "CinemathequeScraper",
     "FondationPatheScraper",
     "ForumDesImagesScraper",
+    "LaVilletteScraper",
     "LeChampoScraper",
     "LeLouxorScraper",
     "ParisCineInfoScraper",
