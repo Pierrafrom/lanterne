@@ -10,6 +10,7 @@ credentials are not configured (see ``docs/setup.md``).
 from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.io.scrapers.base import RawListing, SourceScraper
 from cine_event_bot.io.scrapers.cinematheque import CinemathequeScraper
+from cine_event_bot.io.scrapers.fondationpathe import FondationPatheScraper
 from cine_event_bot.io.scrapers.forumdesimages import ForumDesImagesScraper
 from cine_event_bot.io.scrapers.lechampo import LeChampoScraper
 from cine_event_bot.io.scrapers.louxor import LeLouxorScraper
@@ -45,6 +46,7 @@ def build_scrapers(
         ForumDesImagesScraper(extractor),
         LeChampoScraper(extractor),
         LeLouxorScraper(extractor),
+        FondationPatheScraper(extractor),
     ]
     if paris_cine_info_login and paris_cine_info_password:
         scrapers.append(
@@ -57,6 +59,7 @@ def build_scrapers(
 
 __all__ = [
     "CinemathequeScraper",
+    "FondationPatheScraper",
     "ForumDesImagesScraper",
     "LeChampoScraper",
     "LeLouxorScraper",
