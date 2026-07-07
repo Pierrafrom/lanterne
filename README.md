@@ -4,17 +4,17 @@ Self-hosted Telegram bot that aggregates **special screenings** in Paris/IDF —
 avant-premières (with the film team), ciné-concerts, retrospectives,
 open-air, festivals, cult/midnight screenings, ciné-clubs, short-film
 programmes —
-from five scraped sources, enriches them with TMDB data, sends a **weekly
+from six scraped sources, enriches them with TMDB data, sends a **weekly
 digest**, and answers **natural-language questions** about programmed films.
 
 ## Features
 
-- **Five sources**, each scraped at the most robust level (see
+- **Six sources**, each scraped at the most robust level (see
   [scraping strategy](docs/scraping-strategy.md)): Première Projo (structured
-  Next.js JSON, no LLM), La Cinémathèque française, Le Forum des images, and
-  Le Champo (HTML + LLM extraction), and Paris Ciné Info (authenticated JSON
-  API covering dozens of Paris cinemas at once, LLM classification of each
-  showtime's free-text comment only — see
+  Next.js JSON, no LLM), La Cinémathèque française, Le Forum des images,
+  Le Champo, and Le Louxor (HTML + LLM extraction), and Paris Ciné Info
+  (authenticated JSON API covering dozens of Paris cinemas at once, LLM
+  classification of each showtime's free-text comment only — see
   [ADR 0007](docs/decisions/0007-paris-cine-info.md); requires a personal
   account, optional).
 - **Cross-source deduplication** — the same screening on two sources collapses

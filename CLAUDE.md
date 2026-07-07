@@ -7,10 +7,11 @@
 
 Auto-hosted Telegram bot that aggregates **special screenings** in Paris/IDF
 (avant-premières with team, cine-concerts, retrospectives, open-air,
-festivals, cult screenings, ciné-clubs, short-film programmes) from five
+festivals, cult screenings, ciné-clubs, short-film programmes) from six
 scraped sources (Première Projo, La Cinémathèque française, Le Forum des
-images, Le Champo, Paris Ciné Info — the last an optional, authenticated
-source, see [ADR 0007](docs/decisions/0007-paris-cine-info.md); see also
+images, Le Champo, Le Louxor, Paris Ciné Info — the last an optional,
+authenticated source, see
+[ADR 0007](docs/decisions/0007-paris-cine-info.md); see also
 `docs/scraping-strategy.md`), sends a weekly digest, and answers
 natural-language questions about programmed films using TMDB data.
 

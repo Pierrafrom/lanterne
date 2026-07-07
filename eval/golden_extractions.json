@@ -95,6 +95,18 @@
         "has_team_present": false,
         "cycle_name": null
       }
+    },
+    {
+      "id": "louxor-retrospective-film-block",
+      "raw_text": "Le Louxor\nReference date: 2026-06-20\nROHMER ET L'ÉTÉ · rétrospective en 6 films du 1er au 7 juillet\nLE GENOU DE CLAIRE\nFrance I 1970 I 1h45\nAvec Jean-Claude Brialy, Aurora Cornu, Fabrice Luchini\nJuste avant de se marier, Jérôme vient passer quelques jours dans la région d'Annecy.\n→ SAMEDI 4 JUILLET · 19h\n· Séance présentée par la comédienne et réalisatrice Anne Steffens",
+      "expected": {
+        "title": "Le Genou de Claire",
+        "event_type": "retrospective",
+        "venue": "Le Louxor",
+        "starts_at": "2026-07-04T17:00:00+00:00",
+        "has_team_present": false,
+        "cycle_name": "Rohmer et l'été"
+      }
     }
   ]
 }
