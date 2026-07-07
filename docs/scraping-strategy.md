@@ -56,6 +56,7 @@ flowchart TD
 | La Cinémathèque française | 4              | Implemented           | Homepage `a.event` → `/seance/` detail pages → text → LLM                                                                                                                                                                                                                                                                                      |
 | Première Projo            | 3              | Implemented           | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM                                                                                                                                                                                                                                                                 |
 | Forum des images          | 4              | Implemented           | `/agenda` cards (cycle, title, director, date) → text → LLM; year-less dates resolved against a reference date                                                                                                                                                                                                                                 |
+| Le Champo                 | 4              | Implemented           | `/evenements/cine-clubs.html` — single hand-authored CMS article; each cycle's `div.uk-panel.uk-margin` block is one listing, kept only when it contains a "📍"-marked date; booking link taken from the immediately following sibling block                                                                                                   |
 | Paris Ciné Info           | 2 + 4 (hybrid) | Implemented, optional | Authenticated JSON API (`get_movies.php?events=true` + `get_showtimes.php`, no LLM) across dozens of Paris cinemas at once; only the per-showtime `com` free-text field goes through the LLM. Requires a personal account (`PARIS_CINE_INFO_LOGIN`/`PASSWORD`); skipped entirely when unset. See [ADR 0007](decisions/0007-paris-cine-info.md) |
 
 Sortir à Paris was evaluated and **dropped from the MVP** — it is an editorial
@@ -73,7 +74,6 @@ scraper already takes) before committing to Level 4 over Level 3.
 
 | Source                                          | Level (provisional) | Status                      | Notes                                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------------------------- | ------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Le Champo                                       | 4                   | Ready to implement          | `/evenements/cine-clubs.html` — very clean per-entry pattern (day/date/time/title/host/cycle), one of the easiest sources                                                                                                                                                                                                                            |
 | Le Louxor                                       | 4                   | Ready to implement          | `/evenements/` — clear category tags (rétrospective, ciné-club, avant-première) directly in the HTML                                                                                                                                                                                                                                                 |
 | Fondation Jérôme Seydoux-Pathé                  | 4                   | Ready to implement          | `/agenda` mixes screenings with workshops/exhibitions under category tags — filter to "SÉANCES" only                                                                                                                                                                                                                                                 |
 | La Villette (Cinéma en plein air)               | 4                   | Ready to implement          | Single seasonal page, clean date-grouped listing; only relevant in season (summer)                                                                                                                                                                                                                                                                   |
@@ -93,9 +93,10 @@ authorization/respectful-use reasoning.
 **Suggested implementation order** (no-LLM levels first, per the rule above):
 
 1. ~~Paris Ciné Info~~ — done, see [ADR 0007](decisions/0007-paris-cine-info.md).
+1. ~~Le Champo~~ — done, see [`lechampo.py`](../src/cine_event_bot/io/scrapers/lechampo.py).
 1. **MK2** — verify Level 3 vs 4 first; if Level 3, implement before every
    Level 4 source below (no LLM, cheapest, most robust).
-1. **Le Champo**, **Le Louxor** — Level 4, cleanest structure, highest value
+1. **Le Louxor** — Level 4, cleanest structure, highest remaining value
    (ciné-club/rétrospective is exactly the target content).
 1. **Fondation Jérôme Seydoux-Pathé**, **Le Grand Rex** — Level 4, slightly
    more filtering needed (category tags, mixed event types).
@@ -164,3 +165,12 @@ as a primary discovery source.
   `has_team_present`; a showtime with no comment is skipped rather than
   guessed at. See [`paris_cine_info.py`](../src/cine_event_bot/io/scrapers/paris_cine_info.py)
   and [ADR 0007](decisions/0007-paris-cine-info.md).
+- **Level 4 — Le Champo.** A single hand-authored CMS article, not a feed of
+  cards: each cycle's block is kept only when it contains a human-authored
+  "📍" pin marking its next date, and the booking link (when one exists) sits
+  in the following sibling block rather than nested inside. Anchoring on the
+  pin emoji rather than CSS classes matches the "anchor on the most stable
+  thing" rule — `uk-panel uk-margin` is a generic YOOtheme utility class,
+  reused all over the page, but the pin is a convention the site's own
+  editors chose and keep using. See
+  [`lechampo.py`](../src/cine_event_bot/io/scrapers/lechampo.py).
