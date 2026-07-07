@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from cine_event_bot.core.models import Sighting, Source
 from cine_event_bot.core.progress import NullReporter
@@ -155,6 +155,34 @@ def test_parse_events_falls_back_to_first_cinema_when_no_id_match() -> None:
     )
 
     assert sightings[0].extracted.venue == "mk2 quai de seine"
+
+
+def test_parse_events_warns_when_an_event_spans_multiple_cinemas() -> None:
+    scraper = Mk2Scraper()
+    payload = [
+        _event_list(
+            events=[
+                _event(
+                    name="Cultissime special",
+                    linkedCinemas=[
+                        {"id": "0011", "name": "quai de seine"},
+                        {"id": "0004", "name": "bibliothèque"},
+                    ],
+                    nextSession={
+                        "cinemaId": "0011",
+                        "showTime": "2026-07-07T18:00:00.000Z",
+                    },
+                )
+            ]
+        )
+    ]
+
+    with patch("cine_event_bot.io.scrapers.mk2.logger") as mock_logger:
+        sightings = scraper.parse_events(_rsc_html(payload))
+
+    assert len(sightings) == 1  # the one verified session is still captured
+    mock_logger.warning.assert_called_once()
+    assert "multiple cinemas" in mock_logger.warning.call_args.args[0]
 
 
 def test_parse_events_skips_malformed_events() -> None:
