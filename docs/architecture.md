@@ -33,7 +33,7 @@ flowchart TD
     end
 
     subgraph io["io/ — external I/O"]
-        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum)"]
+        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Paris Ciné Info)"]
         llm["llm<br/>(EventExtractor, QuestionInterpreter)"]
         tmdb["tmdb<br/>(TmdbEnricher)"]
         repo["repository<br/>(Event, Subscriber)"]
@@ -143,6 +143,7 @@ Recorded as ADRs in [`docs/decisions/`](decisions/):
 - [0004](decisions/0004-rsc-extraction-and-pipeline.md) — RSC extraction + scraper output contract
 - [0005](decisions/0005-drop-sortiraparis.md) — dropping Sortir à Paris
 - [0006](decisions/0006-relational-schema-split.md) — Film/Venue/sighting schema split
+- [0007](decisions/0007-paris-cine-info.md) — Paris Ciné Info: authenticated, hybrid-level source
 
 See also [`scraping-strategy.md`](scraping-strategy.md) for how a new source is
 classified and scraped.

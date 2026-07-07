@@ -71,6 +71,30 @@
         "has_team_present": false,
         "cycle_name": null
       }
+    },
+    {
+      "id": "paris-cine-info-festival-avp",
+      "raw_text": "Luminor Hôtel de Ville\nLes Chemins de traverse\nDate : 2026-07-11T18:00:00+00:00\nAvant-première dans le cadre du Festival des Cinémas Indépendants Parisiens, projection présentée par la réalisatrice.",
+      "expected": {
+        "title": "Les Chemins de traverse",
+        "event_type": "avant_premiere",
+        "venue": "Luminor Hôtel de Ville",
+        "starts_at": "2026-07-11T18:00:00+00:00",
+        "has_team_present": true,
+        "cycle_name": "Festival des Cinémas Indépendants Parisiens"
+      }
+    },
+    {
+      "id": "paris-cine-info-cine-club-presentation",
+      "raw_text": "Le Grand Action\nLes Ailes du désir\nDate : 2026-07-14T17:45:00+00:00\nSéance suivie d'une présentation par un critique de la Revue Tsounami, sans l'équipe du film.",
+      "expected": {
+        "title": "Les Ailes du désir",
+        "event_type": "cine_club",
+        "venue": "Le Grand Action",
+        "starts_at": "2026-07-14T17:45:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
     }
   ]
 }

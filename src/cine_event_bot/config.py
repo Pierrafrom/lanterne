@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         log_level: Logging verbosity (DEBUG, INFO, WARNING, ERROR).
         admin_chat_id: Telegram chat that receives the post-scrape report;
             no report is sent when unset.
+        paris_cine_info_login: Email for an existing paris-cine.info account,
+            used to scrape its authenticated programme; that source is
+            skipped when unset.
+        paris_cine_info_password: Password for the paris-cine.info account.
     """
 
     telegram_bot_token: str
@@ -34,6 +38,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./cine_event_bot.db"
     log_level: str = "INFO"
     admin_chat_id: int | None = None
+    paris_cine_info_login: str | None = None
+    paris_cine_info_password: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
