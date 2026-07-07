@@ -61,6 +61,41 @@ Sortir à Paris was evaluated and **dropped from the MVP** — it is an editoria
 news site with no structured screenings agenda; see
 [ADR 0005](decisions/0005-drop-sortiraparis.md).
 
+## Source recon — expansion candidates (2026-07-07)
+
+Evaluated against the decision tree above before implementation. `WebFetch`
+converts pages to markdown and discards `<script>` tags, so it can confirm a
+site *is* Next.js/Nuxt (via asset paths) but **cannot rule out** an embedded
+RSC/`__NEXT_DATA__` JSON payload — sources marked "verify at implementation"
+need one real `httpx.get()` + grep for RSC chunks (the first step every new
+scraper already takes) before committing to Level 4 over Level 3.
+
+| Source                            | Level (provisional) | Status                           | Notes                                                                                                                                                                                                             |
+| --------------------------------- | ------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Le Champo                         | 4                   | Ready to implement               | `/evenements/cine-clubs.html` — very clean per-entry pattern (day/date/time/title/host/cycle), one of the easiest sources                                                                                         |
+| Le Louxor                         | 4                   | Ready to implement               | `/evenements/` — clear category tags (rétrospective, ciné-club, avant-première) directly in the HTML                                                                                                              |
+| Fondation Jérôme Seydoux-Pathé    | 4                   | Ready to implement               | `/agenda` mixes screenings with workshops/exhibitions under category tags — filter to "SÉANCES" only                                                                                                              |
+| La Villette (Cinéma en plein air) | 4                   | Ready to implement               | Single seasonal page, clean date-grouped listing; only relevant in season (summer)                                                                                                                                |
+| Le Grand Rex                      | 4                   | Ready to implement               | `/evenements/`, `/cinema/#evenements` — avant-premières with team + ciné-concerts, matches both target categories                                                                                                 |
+| MK2                               | 3 or 4 (verify)     | Verify at implementation         | Confirmed Next.js (`/_next/static/` assets); `/evenements` may carry RSC JSON like Première Projo — check before writing an LLM-based parser                                                                      |
+| Le Grand Action                   | 4                   | Deprioritized                    | No dedicated events page — special screenings (ciné-clubs, rencontres) are mixed into the homepage and individual film pages; harder to isolate reliably for the same LLM cost                                    |
+| UGC                               | 5 (unconfirmed)     | Needs manual devtools inspection | `/evenements.html` is JS-rendered with no data visible in fetched markup; needs a real browser's network tab to find the XHR endpoint (would drop to Level 2 if found) — out of scope for this recon pass         |
+| Pathé (pathe.fr)                  | —                   | Dropped                          | Returns HTTP 403 to a plain fetch (bot protection) — respecting that signal rather than working around it, per the "be a good citizen" rule                                                                       |
+| Allociné                          | —                   | Dropped                          | Same rationale as [ADR 0005](decisions/0005-drop-sortiraparis.md): a generic listings aggregator, not a curated special-screenings source; its schedule API is a B2B/partner tool (Apidae), not a public endpoint |
+
+**Suggested implementation order** (no-LLM levels first, per the rule above):
+
+1. **MK2** — verify Level 3 vs 4 first; if Level 3, implement before every
+   Level 4 source below (no LLM, cheapest, most robust).
+1. **Le Champo**, **Le Louxor** — Level 4, cleanest structure, highest value
+   (ciné-club/rétrospective is exactly the target content).
+1. **Fondation Jérôme Seydoux-Pathé**, **Le Grand Rex** — Level 4, slightly
+   more filtering needed (category tags, mixed event types).
+1. **La Villette** — Level 4, seasonal (implement ahead of next summer).
+1. **Le Grand Action** — deprioritized until a cleaner listing page appears.
+1. **UGC** — deferred pending a manual devtools session.
+1. **Pathé**, **Allociné** — not planned.
+
 ## Worked examples
 
 - **Level 3 — Première Projo.** The homepage server-renders screenings as JSON
