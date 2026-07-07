@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         ollama_model: Model name used for structured event extraction.
         database_url: Async SQLAlchemy URL for the SQLite database.
         log_level: Logging verbosity (DEBUG, INFO, WARNING, ERROR).
+        admin_chat_id: Telegram chat that receives the post-scrape report;
+            no report is sent when unset.
     """
 
     telegram_bot_token: str
@@ -31,6 +33,7 @@ class Settings(BaseSettings):
     ollama_model: str
     database_url: str = "sqlite+aiosqlite:///./cine_event_bot.db"
     log_level: str = "INFO"
+    admin_chat_id: int | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

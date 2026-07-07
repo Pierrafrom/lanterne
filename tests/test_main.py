@@ -7,10 +7,10 @@ import time
 import pytest
 from typer.testing import CliRunner
 
+from cine_event_bot.core.report import IngestionReport, SourceOutcome
 from cine_event_bot.io.repository import EventStats
 from cine_event_bot.logging_config import JsonlFormatter, get_logger
 from cine_event_bot.main import app, get_greeting
-from cine_event_bot.pipeline import IngestionReport
 
 
 def test_get_greeting_contains_bot_name() -> None:
@@ -31,7 +31,12 @@ def test_greet_command_outputs_greeting() -> None:
 
 def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_run() -> IngestionReport:
-        return IngestionReport(events_ingested=3, sources_failed=1)
+        return IngestionReport(
+            outcomes=(
+                SourceOutcome(source="premiereprojo.fr", events=3),
+                SourceOutcome(source="cinematheque.fr", events=None),
+            )
+        )
 
     monkeypatch.setattr("cine_event_bot.main._run_ingestion", fake_run)
     result = CliRunner().invoke(app, ["scrape"])

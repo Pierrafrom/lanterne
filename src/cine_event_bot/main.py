@@ -20,6 +20,7 @@ from cine_event_bot.core.evaluation import (
     evaluate_cases,
     parse_golden_cases,
 )
+from cine_event_bot.core.report import IngestionReport, build_admin_report
 from cine_event_bot.io.bot import broadcast, build_dispatcher
 from cine_event_bot.io.console import (
     RichReporter,
@@ -38,7 +39,7 @@ from cine_event_bot.io.repository import (
 )
 from cine_event_bot.io.scrapers import build_scrapers
 from cine_event_bot.io.tmdb import build_tmdb_enricher
-from cine_event_bot.pipeline import IngestionPipeline, IngestionReport
+from cine_event_bot.pipeline import IngestionPipeline
 
 app = typer.Typer(help="cine-event-bot admin CLI")
 
@@ -86,9 +87,22 @@ async def _run_ingestion() -> IngestionReport:
             enricher = build_tmdb_enricher(client, settings.tmdb_api_key)
             pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
             with build_progress() as progress:
-                return await pipeline.run(client, RichReporter(progress))
+                report = await pipeline.run(client, RichReporter(progress))
     finally:
         await database.dispose()
+    await _notify_admin(settings, report)
+    return report
+
+
+async def _notify_admin(settings: Settings, report: IngestionReport) -> None:
+    """Send the run's summary to the admin chat, when one is configured."""
+    if settings.admin_chat_id is None:
+        return
+    bot = Bot(settings.telegram_bot_token)
+    try:
+        await broadcast(bot, [settings.admin_chat_id], build_admin_report(report))
+    finally:
+        await bot.session.close()
 
 
 @app.command()

@@ -38,6 +38,7 @@ Then fill `.env` (never commit it — it is gitignored):
 | `OLLAMA_MODEL`       | Model name as listed by `ollama list` (e.g. `llama3.2:3b`)           |
 | `DATABASE_URL`       | Async SQLite URL (default `sqlite+aiosqlite:///./cine_event_bot.db`) |
 | `LOG_LEVEL`          | `DEBUG` / `INFO` / `WARNING` / `ERROR`                               |
+| `ADMIN_CHAT_ID`      | Optional — Telegram chat that receives the post-scrape report        |
 
 Pull the model referenced by `OLLAMA_MODEL` if needed:
 
