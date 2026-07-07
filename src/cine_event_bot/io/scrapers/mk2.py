@@ -16,6 +16,21 @@ title are mapped: "avant-premiere" and "festival". "cinema-club" entries
 showing next — resolving that would need a further, unexplored API call, so
 these are skipped rather than mapped incorrectly. "conferences" entries are
 lecture cycles, not screenings, and are skipped too.
+
+Known limitation for chains, confirmed against live data (not hypothetical):
+an event's data only ever carries one ``nextSession`` (one cinema, one time),
+never a full per-cinema schedule, even when ``linkedCinemas`` lists several
+MK2 venues — the per-cinema showtimes live behind a client-side call the
+``/evenements/<slug>`` detail page's static HTML does not expose (same class
+of gap as UGC's JS-rendered events page). Real, currently-mapped events
+routinely link 4-5 cinemas at once (e.g. an "Avant-premières Little Films
+Festival" entry spanning five MK2 rooms) while carrying only one
+``nextSession`` — so this drops real screenings today, not just in a
+hypothetical future case. Rather than fabricate an assumed-identical time for
+the other venues, a multi-cinema event logs a warning (see
+``_warn_if_multi_cinema``) so the gap is visible and monitorable rather than
+silent; resolving it properly needs the same devtools-level XHR discovery
+already deferred for UGC.
 """
 
 import json
@@ -27,6 +42,9 @@ import httpx
 
 from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
+from cine_event_bot.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 _EVENTS_URL = "https://www.mk2.com/evenements"
 _EVENT_PAGE_URL = "https://www.mk2.com/evenements/{slug}"
@@ -162,6 +180,7 @@ def _sighting(event: dict[str, Any]) -> Sighting | None:
         or venue is None
     ):
         return None
+    _warn_if_multi_cinema(title, event.get("linkedCinemas") or [])
     genres = {genre.get("id") for genre in event.get("genres") or []}
     extracted = ExtractedEvent(
         title=title,
@@ -178,6 +197,17 @@ def _sighting(event: dict[str, Any]) -> Sighting | None:
         source=Source.MK2,
         source_url=_EVENT_PAGE_URL.format(slug=slug),
     )
+
+
+def _warn_if_multi_cinema(title: str, cinemas: list[dict[str, Any]]) -> None:
+    """Log when an event links several cinemas — only one showing is captured."""
+    if len(cinemas) > 1:
+        names = [cinema.get("name") for cinema in cinemas]
+        logger.warning(
+            "mk2 event spans multiple cinemas — only nextSession's screening "
+            "is captured, other venues' showings are silently missed",
+            extra={"ctx": {"title": title, "linked_cinemas": names}},
+        )
 
 
 def _venue(event: dict[str, Any]) -> str | None:
