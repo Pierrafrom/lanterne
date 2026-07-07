@@ -25,24 +25,26 @@ which are validated manually rather than unit-tested.
   - **HTTP** (scrapers, TMDB) uses `MagicMock` clients with `AsyncMock` `.get`;
   - the **LLM** (Instructor) and the **Telegram bot** are mocked.
 - **Scraper parsing** is tested against committed, trimmed real-markup fixtures
-  in `tests/fixtures/` (`cinematheque_*.html`, `forumdesimages_agenda.html`,
-  `premiereprojo_home.html`). A site redesign breaks the parse test — the
-  intended early-warning signal (see [scraping-strategy.md](scraping-strategy.md)).
+  in `tests/fixtures/` (one or more per source, e.g. `cinematheque_*.html`,
+  `lechampo_cineclubs.html`, `mk2_evenements.html` — each trimmed from a real
+  fetch of the live site, not hand-invented markup). A site redesign breaks
+  the parse test — the intended early-warning signal (see
+  [scraping-strategy.md](scraping-strategy.md)).
 - **One behaviour per test**, named `test_<behaviour>_<condition>`.
 
 ## What is tested where
 
-| Area                               | Tests                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                     |
-| Persistence, dedup ingest, search  | `test_db.py`, `test_repository.py`, `test_ingest.py`                  |
-| Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py` |
-| LLM extractor & guards & eval      | `test_llm.py`, `test_validation.py`, `test_evaluation.py`             |
-| TMDB enrichment                    | `test_tmdb.py`                                                        |
-| Ingestion pipeline                 | `test_pipeline.py`                                                    |
-| Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                        |
-| Bot handlers & broadcast           | `test_bot.py`                                                         |
-| CLI & JSONL logging                | `test_main.py`                                                        |
+| Area                               | Tests                                                                                                                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                                                                                                                                                     |
+| Persistence, dedup ingest, search  | `test_db.py`, `test_repository.py`, `test_ingest.py`                                                                                                                                                  |
+| Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py`, `test_lechampo.py`, `test_louxor.py`, `test_fondationpathe.py`, `test_lavillette.py`, `test_mk2.py`, `test_paris_cine_info.py` |
+| LLM extractor & guards & eval      | `test_llm.py`, `test_validation.py`, `test_evaluation.py`                                                                                                                                             |
+| TMDB enrichment                    | `test_tmdb.py`                                                                                                                                                                                        |
+| Ingestion pipeline                 | `test_pipeline.py`                                                                                                                                                                                    |
+| Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                                                                                                                                                        |
+| Bot handlers & broadcast           | `test_bot.py`                                                                                                                                                                                         |
+| CLI & JSONL logging                | `test_main.py`                                                                                                                                                                                        |
 
 ## Quality gates (run before every commit)
 
