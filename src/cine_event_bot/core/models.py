@@ -92,6 +92,7 @@ class Source(StrEnum):
     FORUM_DES_IMAGES = "forumdesimages.fr"
     PARIS_CINE_INFO = "paris-cine.info"
     LE_CHAMPO = "cinema-lechampo.com"
+    LE_LOUXOR = "cinemalouxor.fr"
 
 
 class ExtractedEvent(BaseModel):
