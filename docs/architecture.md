@@ -102,6 +102,13 @@ sequenceDiagram
     P-->>CLI: IngestionReport
 ```
 
+`IngestionReport` (`core/report.py`) records one `SourceOutcome` per scraper —
+its event count, or that it failed. When `ADMIN_CHAT_ID` is configured, `scrape`
+sends `build_admin_report`'s French summary to that chat: ✅ per source with its
+count, ⚠️ when a source returns zero events (the early signal its HTML
+changed), ❌ on a scrape failure — so a broken source is visible without
+reading logs.
+
 ## Deduplication
 
 A screening is identified by a deterministic key derived from its film, venue,

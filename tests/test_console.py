@@ -1,12 +1,12 @@
 """Tests for the Rich progress reporter and console helpers."""
 
+from cine_event_bot.core.report import IngestionReport, SourceOutcome
 from cine_event_bot.io.console import (
     RichReporter,
     build_progress,
     print_banner,
     print_ingestion_summary,
 )
-from cine_event_bot.pipeline import IngestionReport
 
 
 def test_rich_reporter_drives_a_full_source_lifecycle() -> None:
@@ -33,5 +33,12 @@ def test_rich_reporter_handles_failure() -> None:
 
 
 def test_console_helpers_do_not_raise() -> None:
-    print_ingestion_summary(IngestionReport(events_ingested=3, sources_failed=1))
+    print_ingestion_summary(
+        IngestionReport(
+            outcomes=(
+                SourceOutcome(source="premiereprojo.fr", events=3),
+                SourceOutcome(source="cinematheque.fr", events=None),
+            )
+        )
+    )
     print_banner("test banner")

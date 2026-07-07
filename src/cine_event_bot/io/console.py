@@ -18,9 +18,9 @@ from rich.progress import (
 from rich.table import Table
 
 from cine_event_bot.core.evaluation import EvaluationSummary
+from cine_event_bot.core.report import IngestionReport
 from cine_event_bot.io.repository import EventStats
 from cine_event_bot.logging_config import console
-from cine_event_bot.pipeline import IngestionReport
 
 
 def build_progress() -> Progress:

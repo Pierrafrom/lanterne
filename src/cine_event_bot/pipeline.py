@@ -11,13 +11,13 @@ whole run; a failing enrichment is logged and the event stays persisted.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
 
 from cine_event_bot.core.models import Film, ScreeningEvent
 from cine_event_bot.core.progress import NullReporter, ProgressReporter
+from cine_event_bot.core.report import IngestionReport, SourceOutcome
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.io.scrapers.base import SourceScraper
 from cine_event_bot.logging_config import get_logger
@@ -31,19 +31,6 @@ class FilmEnricher(Protocol):
     async def enrich(self, film: Film) -> None:
         """Enrich a film in place; a no-match leaves it untouched."""
         ...
-
-
-@dataclass(frozen=True, slots=True)
-class IngestionReport:
-    """Outcome of one ingestion run.
-
-    Attributes:
-        events_ingested: Total sightings ingested across all sources.
-        sources_failed: Number of sources whose scrape raised and was skipped.
-    """
-
-    events_ingested: int
-    sources_failed: int
 
 
 class IngestionPipeline:
@@ -82,19 +69,26 @@ class IngestionPipeline:
             An :class:`IngestionReport` summarising the run.
         """
         active = reporter if reporter is not None else NullReporter()
-        ingested = 0
-        failed = 0
-        for scraper in self._scrapers:
-            count = await self._ingest_source(scraper, client, active)
-            if count is None:
-                failed += 1
-            else:
-                ingested += count
+        outcomes = tuple(
+            [
+                SourceOutcome(
+                    source=scraper.source.value,
+                    events=await self._ingest_source(scraper, client, active),
+                )
+                for scraper in self._scrapers
+            ]
+        )
+        report = IngestionReport(outcomes=outcomes)
         logger.info(
             "ingestion complete",
-            extra={"ctx": {"events_ingested": ingested, "sources_failed": failed}},
+            extra={
+                "ctx": {
+                    "events_ingested": report.events_ingested,
+                    "sources_failed": report.sources_failed,
+                }
+            },
         )
-        return IngestionReport(events_ingested=ingested, sources_failed=failed)
+        return report
 
     async def _ingest_source(
         self,
