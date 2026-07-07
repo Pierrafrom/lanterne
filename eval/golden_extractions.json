@@ -107,6 +107,18 @@
         "has_team_present": false,
         "cycle_name": "Rohmer et l'été"
       }
+    },
+    {
+      "id": "fondationpathe-silent-film-full-date",
+      "raw_text": "Fondation Jérôme Seydoux-Pathé\n07/07/2026 - 14:30\n\"20,000 Leagues Under the Sea\" (\"Vingt Mille Lieues sous les mers\"), Stuart Paton, 1916 (1h42)",
+      "expected": {
+        "title": "20,000 Leagues Under the Sea",
+        "event_type": "retrospective",
+        "venue": "Fondation Jérôme Seydoux-Pathé",
+        "starts_at": "2026-07-07T12:30:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
     }
   ]
 }

@@ -33,7 +33,7 @@ flowchart TD
     end
 
     subgraph io["io/ — external I/O"]
-        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Le Champo, Le Louxor, Paris Ciné Info)"]
+        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Le Champo, Le Louxor, Fondation Pathé,<br/>Paris Ciné Info)"]
         llm["llm<br/>(EventExtractor, QuestionInterpreter)"]
         tmdb["tmdb<br/>(TmdbEnricher)"]
         repo["repository<br/>(Event, Subscriber)"]
