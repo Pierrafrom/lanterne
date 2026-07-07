@@ -30,15 +30,22 @@ cp .env.example .env
 
 Then fill `.env` (never commit it — it is gitignored):
 
-| Variable             | Purpose                                                              |
-| -------------------- | -------------------------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather                                            |
-| `TMDB_API_KEY`       | TMDB v3 API key                                                      |
-| `OLLAMA_BASE_URL`    | Ollama base URL (e.g. `http://localhost:11434`)                      |
-| `OLLAMA_MODEL`       | Model name as listed by `ollama list` (e.g. `llama3.2:3b`)           |
-| `DATABASE_URL`       | Async SQLite URL (default `sqlite+aiosqlite:///./cine_event_bot.db`) |
-| `LOG_LEVEL`          | `DEBUG` / `INFO` / `WARNING` / `ERROR`                               |
-| `ADMIN_CHAT_ID`      | Optional — Telegram chat that receives the post-scrape report        |
+| Variable                   | Purpose                                                              |
+| -------------------------- | -------------------------------------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`       | Bot token from @BotFather                                            |
+| `TMDB_API_KEY`             | TMDB v3 API key                                                      |
+| `OLLAMA_BASE_URL`          | Ollama base URL (e.g. `http://localhost:11434`)                      |
+| `OLLAMA_MODEL`             | Model name as listed by `ollama list` (e.g. `llama3.2:3b`)           |
+| `DATABASE_URL`             | Async SQLite URL (default `sqlite+aiosqlite:///./cine_event_bot.db`) |
+| `LOG_LEVEL`                | `DEBUG` / `INFO` / `WARNING` / `ERROR`                               |
+| `ADMIN_CHAT_ID`            | Optional — Telegram chat that receives the post-scrape report        |
+| `PARIS_CINE_INFO_LOGIN`    | Optional — email of a personal paris-cine.info account               |
+| `PARIS_CINE_INFO_PASSWORD` | Optional — its password                                              |
+
+`PARIS_CINE_INFO_LOGIN`/`PARIS_CINE_INFO_PASSWORD` enable the Paris Ciné Info
+source (see [ADR 0007](decisions/0007-paris-cine-info.md)) — an aggregator
+covering dozens of Paris cinemas at once, requiring a personal account. Leave
+both empty to skip it entirely; every other source works without it.
 
 Pull the model referenced by `OLLAMA_MODEL` if needed:
 
@@ -48,9 +55,10 @@ ollama pull qwen2.5:7b
 
 ### Choosing a model
 
-Only the two text sources (Cinémathèque, Forum des images) call the LLM, once
-per screening; Première Projo is mapped directly with no LLM. The model must
-follow a strict JSON schema (enum `event_type`, boolean `has_team_present`).
+The text sources (Cinémathèque, Forum des images) call the LLM once per
+screening, and Paris Ciné Info once per commented showtime; Première Projo is
+mapped directly with no LLM. The model must follow a strict JSON schema (enum
+`event_type`, boolean `has_team_present`).
 
 - **Recommended local: `qwen2.5:7b`** (or `qwen2.5:3b` for speed). Qwen2.5 is the
   strongest small model for structured/JSON output and respects the enum far
@@ -149,15 +157,20 @@ inside VS Code:
    zero-config: click the `.db` file to open a table browser. For running
    queries, use **SQLite** (`alexcvzz.vscode-sqlite`) instead and run
    *"SQLite: Open Database"* from the command palette.
-1. Open `cine_event_bot.db`; the `screeningevent` table holds the events and
-   `subscriber` the digest opt-ins.
+1. Open `cine_event_bot.db`; `screeningevent` holds the screenings (joined to
+   `film` and `venue`), `eventsighting` the per-source provenance, and
+   `subscriber` the digest opt-ins — see
+   [ADR 0006](decisions/0006-relational-schema-split.md) for the full schema.
 
 Useful queries:
 
 ```sql
-SELECT count(*), source FROM screeningevent GROUP BY source;
-SELECT title, venue, starts_at, has_team_present
-FROM screeningevent ORDER BY starts_at LIMIT 20;
+SELECT s.source, count(*) FROM eventsighting s GROUP BY s.source;
+SELECT f.title, v.name AS venue, e.starts_at, e.has_team_present
+FROM screeningevent e
+JOIN film f ON f.id = e.film_id
+JOIN venue v ON v.id = e.venue_id
+ORDER BY e.starts_at LIMIT 20;
 SELECT count(*) FROM screeningevent WHERE has_team_present = 1;  -- team-present previews
 ```
 

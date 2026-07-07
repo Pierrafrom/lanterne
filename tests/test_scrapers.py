@@ -39,14 +39,28 @@ def _response(text: str) -> MagicMock:
     return response
 
 
-def test_registry_covers_every_source() -> None:
-    scrapers = build_scrapers(_extractor_returning(_sample_extracted()))
+def test_registry_covers_every_source_when_fully_configured() -> None:
+    scrapers = build_scrapers(
+        _extractor_returning(_sample_extracted()),
+        paris_cine_info_login="user@example.test",
+        paris_cine_info_password="secret",
+    )
 
     assert {scraper.source for scraper in scrapers} == set(Source)
 
 
-def test_every_built_scraper_satisfies_the_protocol() -> None:
+def test_registry_skips_paris_cine_info_without_credentials() -> None:
     scrapers = build_scrapers(_extractor_returning(_sample_extracted()))
+
+    assert Source.PARIS_CINE_INFO not in {scraper.source for scraper in scrapers}
+
+
+def test_every_built_scraper_satisfies_the_protocol() -> None:
+    scrapers = build_scrapers(
+        _extractor_returning(_sample_extracted()),
+        paris_cine_info_login="user@example.test",
+        paris_cine_info_password="secret",
+    )
 
     assert all(isinstance(scraper, SourceScraper) for scraper in scrapers)
 

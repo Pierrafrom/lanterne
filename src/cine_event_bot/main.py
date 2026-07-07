@@ -74,7 +74,11 @@ async def _run_ingestion() -> IngestionReport:
     settings = Settings()
     database = Database(settings.database_url)
     await database.migrate_to_head()
-    scrapers = build_scrapers(build_extractor(settings))
+    scrapers = build_scrapers(
+        build_extractor(settings),
+        paris_cine_info_login=settings.paris_cine_info_login,
+        paris_cine_info_password=settings.paris_cine_info_password,
+    )
     try:
         async with (
             httpx.AsyncClient(

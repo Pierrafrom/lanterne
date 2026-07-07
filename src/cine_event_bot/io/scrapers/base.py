@@ -46,11 +46,14 @@ class RawListing:
         source: The source this listing was scraped from.
         source_url: Direct link to the announcement.
         raw_text: Human-readable text describing the screening.
+        booking_url: Direct link to buy tickets, when the source provides one
+            independently of the announcement page.
     """
 
     source: Source
     source_url: str
     raw_text: str
+    booking_url: str | None = None
 
 
 async def structure_via_llm(
@@ -93,7 +96,10 @@ async def structure_via_llm(
         )
         return None
     return Sighting(
-        extracted=extracted, source=listing.source, source_url=listing.source_url
+        extracted=extracted,
+        source=listing.source,
+        source_url=listing.source_url,
+        booking_url=listing.booking_url,
     )
 
 
