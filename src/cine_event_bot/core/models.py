@@ -95,6 +95,7 @@ class Source(StrEnum):
     LE_LOUXOR = "cinemalouxor.fr"
     FONDATION_PATHE = "fondation-jeromeseydoux-pathe.com"
     LA_VILLETTE = "lavillette.com"
+    MK2 = "mk2.com"
 
 
 class ExtractedEvent(BaseModel):
