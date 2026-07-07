@@ -119,6 +119,18 @@
         "has_team_present": false,
         "cycle_name": null
       }
+    },
+    {
+      "id": "lavillette-open-air-young-audience",
+      "raw_text": "Cinéma en plein air de La Villette\nReference date: 2026-07-06\nMercredi 22 juillet à 18h00\nMon voisin Totoro\n, Hayao Miyazaki • 1999\nVF • Durée : 1h27\nDeux petites filles viennent s'installer avec leur père à la campagne, où elles découvrent un monde magique peuplé de créatures appelées Totoros.",
+      "expected": {
+        "title": "Mon voisin Totoro",
+        "event_type": "open_air",
+        "venue": "Cinéma en plein air de La Villette",
+        "starts_at": "2026-07-22T16:00:00+00:00",
+        "has_team_present": false,
+        "cycle_name": null
+      }
     }
   ]
 }
