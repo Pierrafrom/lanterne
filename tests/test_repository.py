@@ -2,7 +2,9 @@
 
 from datetime import UTC, datetime
 
+import pytest
 from factories import make_sighting
+from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from cine_event_bot.core.models import ScreeningEvent
@@ -110,6 +112,29 @@ async def test_stats_summarizes_stored_events(session: AsyncSession) -> None:
     assert stats.last_starts_at is not None
     assert stats.first_starts_at < stats.last_starts_at
     assert stats.first_starts_at.day == 1
+
+
+async def test_save_film_rolls_back_on_commit_failure_so_session_stays_usable(
+    session: AsyncSession,
+) -> None:
+    repo = EventRepository(session)
+    first = await _ingest(
+        repo, title="First", starts_at=datetime(2026, 7, 1, 20, 0, tzinfo=UTC)
+    )
+    second = await _ingest(
+        repo, title="Second", starts_at=datetime(2026, 7, 2, 20, 0, tzinfo=UTC)
+    )
+    first.film.tmdb_id = 693134
+    await repo.save_film(first.film)
+    second.film.tmdb_id = 693134  # same TMDB id: violates the unique constraint
+
+    with pytest.raises(IntegrityError):
+        await repo.save_film(second.film)
+
+    # A poisoned session would raise PendingRollbackError here instead of
+    # running the query — this is what crashed a live scrape run.
+    stats = await repo.stats()
+    assert stats.total == 2
 
 
 async def test_subscribe_creates_active_subscriber(session: AsyncSession) -> None:

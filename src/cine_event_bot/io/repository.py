@@ -33,6 +33,23 @@ from cine_event_bot.core.qa import QueryCriteria
 
 _SEARCH_LIMIT = 20
 
+
+async def _commit(session: AsyncSession) -> None:
+    """Commit the session, rolling back on failure to keep it reusable.
+
+    An uncaught commit failure (e.g. a unique-constraint collision) leaves an
+    AsyncSession in SQLAlchemy's "pending rollback" state, where every
+    subsequent operation raises ``PendingRollbackError`` regardless of what it
+    does — turning one bad row into a crash of the whole ingestion run instead
+    of the one enrichment or sighting that actually failed.
+    """
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+
+
 # Eager-load options applied to every event query: callers format events with
 # their film and venue, and lazy loading is not available on async sessions.
 # The type: ignore pair is needed because SQLModel types Relationship class
@@ -121,7 +138,7 @@ class EventRepository:
         # No refresh: expire_on_commit=False keeps the id, columns, and the
         # film/venue relationships loaded; a refresh would expire the
         # relationships and force a lazy load async sessions cannot perform.
-        await self._session.commit()
+        await _commit(self._session)
         await self._record_sighting(event, sighting)
         return event
 
@@ -145,7 +162,7 @@ class EventRepository:
             film: The film row to save.
         """
         self._session.add(film)
-        await self._session.commit()
+        await _commit(self._session)
 
     async def get_by_dedup_key(self, dedup_key: str) -> ScreeningEvent | None:
         """Return the event matching a deduplication key, if any.
@@ -268,7 +285,7 @@ class EventRepository:
         if existing.booking_url is None:
             existing.booking_url = sighting.booking_url
         self._session.add(existing)
-        await self._session.commit()
+        await _commit(self._session)
         await self._record_sighting(existing, sighting)
         return existing
 
@@ -289,7 +306,7 @@ class EventRepository:
                 scraped_at=datetime.now(UTC),
             )
         )
-        await self._session.commit()
+        await _commit(self._session)
 
     async def _resolve_film(self, title: str) -> Film:
         """Return the film row for an announced title, creating it if new."""
@@ -344,7 +361,7 @@ class SubscriberRepository:
         else:
             subscriber.is_active = True
         self._session.add(subscriber)
-        await self._session.commit()
+        await _commit(self._session)
         await self._session.refresh(subscriber)
         return subscriber
 
@@ -362,7 +379,7 @@ class SubscriberRepository:
             return
         subscriber.is_active = False
         self._session.add(subscriber)
-        await self._session.commit()
+        await _commit(self._session)
 
     async def list_active(self) -> list[Subscriber]:
         """Return every chat currently opted in to the digest.

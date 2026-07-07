@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from cine_event_bot.core.dedup import compute_dedup_key
+from cine_event_bot.core.dedup import compute_dedup_key, normalize_text
 
 
 def _moment() -> datetime:
@@ -33,3 +33,17 @@ def test_dedup_key_differs_for_distinct_screenings() -> None:
     same_film_same_venue = compute_dedup_key("Dune", "Le Grand Rex", moment)
 
     assert same_film_other_venue != same_film_same_venue
+
+
+def test_dedup_key_ignores_apostrophe_variant() -> None:
+    moment = _moment()
+
+    curly = compute_dedup_key("L’Écologie des sentiments", "mk2 nation", moment)
+    straight = compute_dedup_key("L'Écologie des sentiments", "mk2 nation", moment)
+
+    assert curly == straight
+
+
+def test_normalize_text_treats_apostrophe_variants_as_equal() -> None:
+    assert normalize_text("L’écologie") == normalize_text("L'écologie")
+    assert normalize_text("aujourd‘hui") == normalize_text("aujourd'hui")
