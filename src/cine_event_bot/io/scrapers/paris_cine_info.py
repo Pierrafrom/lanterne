@@ -12,8 +12,19 @@ reads exactly like the announcement text scraped from single-venue sources
 (e.g. "Avant-première Festival des Cinémas Indépendants Parisiens, projection
 présentée par..."). A showtime with no comment is an ordinary screening —
 even for a film flagged as "événement" — and is not ingested.
+
+The title, venue, and start time are always already known with certainty from
+the structured API — the LLM is only asked to classify the comment
+(``event_type``, ``has_team_present``, ``cycle_name``, ``description``). Its
+title/venue/start-time guesses are discarded rather than trusted: an early
+version fed venue+title+comment to the LLM as one blob and kept its full
+output, which occasionally merged two lines into one garbled title (e.g. "Les
+7 Parnassiens Rita et Crocodile") and fell back to a placeholder venue
+("null", "No venue specified") instead of the venue already known for
+certain.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -24,6 +35,22 @@ from cine_event_bot.core.models import Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.io.scrapers.base import RawListing, gather_events, structure_via_llm
+
+
+@dataclass(frozen=True, slots=True)
+class _Candidate:
+    """A showtime ready for LLM classification, carrying its known-true facts.
+
+    ``listing`` still includes the venue/title as text context so the LLM can
+    correctly interpret the comment (e.g. whose team is presenting), but its
+    title/venue/start-time output is discarded in favor of these fields.
+    """
+
+    listing: RawListing
+    known_title: str
+    known_venue: str
+    known_starts_at: datetime
+
 
 _SITE_URL = "https://paris-cine.info/"
 _LOGIN_URL = f"{_SITE_URL}login/do_login.php"
@@ -76,20 +103,20 @@ class ParisCineInfoScraper:
         """
         await self._log_in(client)
         movies = await self._fetch_event_movies(client)
-        listings: list[RawListing] = []
+        candidates: list[_Candidate] = []
         for movie in movies:
             showtimes = await self._fetch_showtimes(client, movie)
-            listings.extend(
-                listing
+            candidates.extend(
+                candidate
                 for showtime in showtimes
-                if (listing := build_listing(movie, showtime)) is not None
+                if (candidate := build_candidate(movie, showtime)) is not None
             )
 
-        async def extract(listing: RawListing) -> Sighting | None:
-            return await structure_via_llm(self._extractor, listing)
+        async def extract(candidate: _Candidate) -> Sighting | None:
+            return await _classify(self._extractor, candidate)
 
         return await gather_events(
-            listings, extract, reporter=reporter, source=self.source.value
+            candidates, extract, reporter=reporter, source=self.source.value
         )
 
     async def _log_in(self, client: httpx.AsyncClient) -> None:
@@ -130,8 +157,10 @@ class ParisCineInfoScraper:
         return showtimes if isinstance(showtimes, list) else []
 
 
-def build_listing(movie: dict[str, Any], showtime: dict[str, Any]) -> RawListing | None:
-    """Build a raw listing from one showtime, or None if it is not a special one.
+def build_candidate(
+    movie: dict[str, Any], showtime: dict[str, Any]
+) -> _Candidate | None:
+    """Build a classification candidate from one showtime, or None if not a special one.
 
     A showtime with a blank ``com`` is an ordinary screening — even for a film
     the site otherwise flags as "événement" — and is not a candidate for the
@@ -143,7 +172,7 @@ def build_listing(movie: dict[str, Any], showtime: dict[str, Any]) -> RawListing
         showtime: One entry from ``get_showtimes.php``'s ``showtimes`` array.
 
     Returns:
-        The raw listing ready for LLM structuring, or None when the showtime
+        The candidate ready for LLM classification, or None when the showtime
         has no comment or is missing an essential field.
     """
     comment = showtime.get("com")
@@ -156,11 +185,50 @@ def build_listing(movie: dict[str, Any], showtime: dict[str, Any]) -> RawListing
         return None
     raw_text = f"{venue}\n{title}\nDate : {starts_at.isoformat()}\n{comment}"
     booking_url = showtime.get("book") or None
-    return RawListing(
+    listing = RawListing(
         source=Source.PARIS_CINE_INFO,
         source_url=booking_url or _SITE_URL,
         raw_text=raw_text,
         booking_url=booking_url,
+    )
+    return _Candidate(
+        listing=listing, known_title=title, known_venue=venue, known_starts_at=starts_at
+    )
+
+
+async def _classify(
+    extractor: EventExtractor, candidate: _Candidate
+) -> Sighting | None:
+    """Classify a candidate's comment via the LLM, keeping only its known facts.
+
+    The LLM's own title/venue/start-time guesses are discarded — they are
+    already known with certainty from the structured API — and only its
+    classification of the comment (event type, team presence, cycle, free-text
+    description) is kept.
+
+    Args:
+        extractor: LLM-backed extractor classifying the comment.
+        candidate: The showtime to classify, with its known-true facts.
+
+    Returns:
+        The sighting with known facts restored, or None when classification
+        failed or was rejected.
+    """
+    sighting = await structure_via_llm(extractor, candidate.listing)
+    if sighting is None:
+        return None
+    corrected = sighting.extracted.model_copy(
+        update={
+            "title": candidate.known_title,
+            "venue": candidate.known_venue,
+            "starts_at": candidate.known_starts_at,
+        }
+    )
+    return Sighting(
+        extracted=corrected,
+        source=sighting.source,
+        source_url=sighting.source_url,
+        booking_url=sighting.booking_url,
     )
 
 
