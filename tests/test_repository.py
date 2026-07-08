@@ -28,6 +28,26 @@ async def test_ingest_then_get_by_dedup_key_roundtrip(session: AsyncSession) -> 
     assert found.film.title == "Dune"
 
 
+async def test_ingest_collapses_a_known_venue_alias_onto_one_venue_row(
+    session: AsyncSession,
+) -> None:
+    repo = EventRepository(session)
+
+    short_form = await repo.ingest(
+        make_sighting(title="A", venue="Forum des images", starts_at=_moment())
+    )
+    long_form = await repo.ingest(
+        make_sighting(title="B", venue="Le Forum des images", starts_at=_moment())
+    )
+
+    assert short_form.venue_id == long_form.venue_id
+    assert short_form.venue.name == "Le Forum des images"
+
+
+def _moment() -> datetime:
+    return datetime(2026, 7, 1, 20, 30, tzinfo=UTC)
+
+
 async def test_get_by_dedup_key_returns_none_when_absent(
     session: AsyncSession,
 ) -> None:

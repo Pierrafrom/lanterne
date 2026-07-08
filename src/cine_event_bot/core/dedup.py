@@ -45,20 +45,59 @@ def normalize_text(text: str) -> str:
     return " ".join(text.translate(_APOSTROPHE_VARIANTS).lower().split())
 
 
+# Known venue-name variants that normalize_text alone does not unify: sources
+# occasionally announce the same physical venue under different wording
+# (a shorter form, a digit spelled out, a room name in a different order).
+# Left unmapped, each variant gets its own Venue row and splits that venue's
+# screenings across rows instead of collapsing them — keyed by the
+# normalized alias, mapped to the display name used everywhere else.
+_VENUE_ALIASES: dict[str, str] = {
+    "forum des images": "Le Forum des images",
+    "cinémathèque française salle georges franju": (
+        "La Cinémathèque française - Salle Georges Franju"
+    ),
+    "la cinémathèque française salle georges franju": (
+        "La Cinémathèque française - Salle Georges Franju"
+    ),
+    "salle georges franju, paris": "La Cinémathèque française - Salle Georges Franju",
+    "salle henri langlois, la cinémathèque française": (
+        "La Cinémathèque française - Salle Henri Langlois"
+    ),
+    "paris cinémathèque": "La Cinémathèque française",
+    "mk2 bastille (fg st antoine)": "MK2 Bastille (côté Fg St Antoine)",
+    "les cinq caumartin": "Les 5 Caumartin",
+    "sept parnassiens": "Les 7 Parnassiens",
+}
+
+
+def canonicalize_venue_name(name: str) -> str:
+    """Map a known venue-name alias to the display name used everywhere else.
+
+    Args:
+        name: Venue name as announced by a source.
+
+    Returns:
+        The canonical display name, or ``name`` unchanged if it has no known
+        alias.
+    """
+    return _VENUE_ALIASES.get(normalize_text(name), name)
+
+
 def compute_dedup_key(title: str, venue: str, starts_at: datetime) -> str:
     """Compute the deduplication key identifying a unique screening.
 
     The key is stable across runs and across sources: the same film at the same
-    venue and start time always yields the same key, regardless of casing or
-    surrounding whitespace in the scraped text.
+    venue and start time always yields the same key, regardless of casing,
+    surrounding whitespace, or a known venue-name alias in the scraped text.
 
     Args:
         title: Film title as scraped (casing/whitespace insensitive).
-        venue: Venue or cinema name (casing/whitespace insensitive).
+        venue: Venue or cinema name (casing/whitespace/alias insensitive).
         starts_at: Exact screening start time, timezone-aware UTC.
 
     Returns:
         A hexadecimal SHA-256 digest used as the unique key in storage.
     """
-    raw = f"{normalize_text(title)}|{normalize_text(venue)}|{starts_at.isoformat()}"
+    canonical_venue = normalize_text(canonicalize_venue_name(venue))
+    raw = f"{normalize_text(title)}|{canonical_venue}|{starts_at.isoformat()}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

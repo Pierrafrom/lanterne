@@ -20,7 +20,11 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.dedup import compute_dedup_key, normalize_text
+from cine_event_bot.core.dedup import (
+    canonicalize_venue_name,
+    compute_dedup_key,
+    normalize_text,
+)
 from cine_event_bot.core.models import (
     EventSighting,
     Film,
@@ -320,13 +324,14 @@ class EventRepository:
 
     async def _resolve_venue(self, name: str) -> Venue:
         """Return the venue row for an announced name, creating it if new."""
-        slug = normalize_text(name)
+        canonical = canonicalize_venue_name(name)
+        slug = normalize_text(canonical)
         statement = select(Venue).where(Venue.slug == slug)
         result = await self._session.exec(statement)
         existing = result.first()
         if existing is not None:
             return existing
-        return Venue(slug=slug, name=name)
+        return Venue(slug=slug, name=canonical)
 
 
 class SubscriberRepository:
