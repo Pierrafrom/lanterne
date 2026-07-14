@@ -19,7 +19,10 @@ from rich.table import Table
 
 from cine_event_bot.core.evaluation import EvaluationSummary
 from cine_event_bot.core.report import IngestionReport
-from cine_event_bot.io.repository import EventStats
+from cine_event_bot.core.specialness_evaluation import (
+    EvaluationSummary as SpecialnessEvaluationSummary,
+)
+from cine_event_bot.core.stats import EventStats
 from cine_event_bot.logging_config import console
 
 
@@ -100,6 +103,8 @@ def print_stats(stats: EventStats) -> None:
     table.add_row("Total events", str(stats.total))
     table.add_row("By source", _as_pairs(stats.by_source))
     table.add_row("By type", _as_pairs(stats.by_type))
+    table.add_row("By venue kind", _as_pairs(stats.by_venue_kind))
+    table.add_row("Specialization rate", f"{stats.specialization_rate:.0%}")
     table.add_row("Team present", str(stats.team_present))
     table.add_row("TMDB enriched", str(stats.enriched))
     if stats.first_starts_at and stats.last_starts_at:
@@ -137,6 +142,39 @@ def print_evaluation(summary: EvaluationSummary, *, model: str) -> None:
     for result in imperfect:
         for field, (expected, actual) in result.mismatches.items():
             details.add_row(result.case_id, field, expected, actual)
+    console.print(details)
+
+
+def print_specialness_evaluation(summary: SpecialnessEvaluationSummary) -> None:
+    """Print a specialness-classifier evaluation report as Rich tables.
+
+    Args:
+        summary: The aggregated evaluation scores.
+    """
+    table = Table(title="Specialness classifier evaluation")
+    table.add_column("Metric")
+    table.add_column("Value")
+    table.add_row("Cases", str(summary.total_cases))
+    table.add_row("Accuracy", f"{summary.accuracy:.0%}")
+    table.add_row("Precision", f"{summary.precision:.0%}")
+    table.add_row("Recall", f"{summary.recall:.0%}")
+    console.print(table)
+
+    wrong = [result for result in summary.results if not result.correct]
+    if not wrong:
+        return
+    details = Table(title="Misclassified cases")
+    details.add_column("Case")
+    details.add_column("Expected")
+    details.add_column("Actual")
+    details.add_column("Fired rules")
+    for result in wrong:
+        details.add_row(
+            result.case_id,
+            str(result.expected_special),
+            str(result.actual_special),
+            ", ".join(result.reasons) if result.reasons else "—",
+        )
     console.print(details)
 
 

@@ -1,17 +1,26 @@
 """Weekly digest formatting.
 
-Turns a set of screenings into the plain-text message broadcast to subscribers.
+Turns a set of screenings into the HTML message broadcast to subscribers.
 Pure and side-effect free, so it is fully unit-tested without Telegram.
 
 User-facing strings are in **French**: the bot targets a French-speaking
 Parisian audience (see the project ``CLAUDE.md``). Times are shown in Paris
-local time via :mod:`cine_event_bot.core.frenchfmt`.
+local time via :mod:`cine_event_bot.core.frenchfmt`. The message is sent with
+Telegram's HTML parse mode (see ``io/bot.py``), so every dynamic value (film
+title, venue name) is HTML-escaped and each line gets a clickable "Réserver"
+link when a booking URL is known.
 """
 
+import html
 from collections.abc import Sequence
 from itertools import groupby
 
-from cine_event_bot.core.frenchfmt import event_type_label, french_date, french_time
+from cine_event_bot.core.frenchfmt import (
+    booking_link_html,
+    event_type_label,
+    french_date,
+    french_time,
+)
 from cine_event_bot.core.models import ScreeningEvent
 
 _HEADER = "🎬 Séances spéciales de la semaine"
@@ -46,7 +55,7 @@ def _day_label(event: ScreeningEvent) -> str:
 
 
 def _event_line(event: ScreeningEvent) -> str:
-    """Format one screening as a digest bullet line.
+    """Format one screening as an HTML digest bullet line.
 
     Expects the event's ``film`` and ``venue`` relationships to be loaded
     (repository queries eager-load them).
@@ -57,6 +66,7 @@ def _event_line(event: ScreeningEvent) -> str:
     label = event_type_label(event.event_type)
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
     return (
-        f"• {french_time(event.starts_at)} — {title} · "
-        f"{event.venue.name} · {label}{suffix}"
+        f"• {french_time(event.starts_at)} — {html.escape(title)} · "
+        f"{html.escape(event.venue.name)} · {html.escape(label)}{suffix}"
+        f"{booking_link_html(event.booking_url)}"
     )

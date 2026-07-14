@@ -1,0 +1,102 @@
+{
+  "cases": [
+    {
+      "id": "mainstream-chain-release",
+      "title": "Blockbuster récent",
+      "venue": "UGC Ciné Cité Les Halles",
+      "venue_kind": "chain_ugc",
+      "has_team_present": false,
+      "cycle_name": null,
+      "release_year": 2026,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 25,
+      "weekly_showing_count": 14,
+      "expected_special": false,
+      "notes": "A wide theatrical release at a chain multiplex, many venues and showings — the baseline ordinary case."
+    },
+    {
+      "id": "avant-premiere-team-present",
+      "title": "Nouveau Film Indépendant",
+      "venue": "Le Grand Rex",
+      "venue_kind": "independent",
+      "has_team_present": true,
+      "cycle_name": null,
+      "release_year": 2026,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 8,
+      "weekly_showing_count": 5,
+      "expected_special": true,
+      "notes": "team_present fires regardless of venue count — confirmed team presence is always worth surfacing."
+    },
+    {
+      "id": "cycle-name-announced",
+      "title": "Film de Répertoire",
+      "venue": "Le Champo",
+      "venue_kind": "independent",
+      "has_team_present": false,
+      "cycle_name": "Rétrospective Agnès Varda",
+      "release_year": 1985,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 6,
+      "weekly_showing_count": 4,
+      "expected_special": true,
+      "notes": "cycle_name fires on its own, independent of the film's age or venue count."
+    },
+    {
+      "id": "institution-venue",
+      "title": "Film Patrimonial",
+      "venue": "La Cinémathèque française",
+      "venue_kind": "institution",
+      "has_team_present": false,
+      "cycle_name": null,
+      "release_year": 2015,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 5,
+      "weekly_showing_count": 4,
+      "expected_special": true,
+      "notes": "institution_venue fires on venue kind alone."
+    },
+    {
+      "id": "old-classic-wide-release",
+      "title": "Classique Ressorti",
+      "venue": "Le Grand Action",
+      "venue_kind": "independent",
+      "has_team_present": false,
+      "cycle_name": null,
+      "release_year": 2010,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 10,
+      "weekly_showing_count": 6,
+      "expected_special": true,
+      "notes": "repertory_rarity isolated: 16 years old, but venue/showing counts kept above the aggregate-rule thresholds so only the age signal fires."
+    },
+    {
+      "id": "rare-single-venue-arthouse",
+      "title": "Film d'Auteur Confidentiel",
+      "venue": "Studio des Ursulines",
+      "venue_kind": "independent",
+      "has_team_present": false,
+      "cycle_name": null,
+      "release_year": 2026,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 2,
+      "weekly_showing_count": 1,
+      "expected_special": true,
+      "notes": "rare_venue_count and sparse_showing_frequency both fire: a recent film shown at only 2 venues, once a week at this one."
+    },
+    {
+      "id": "just-above-aggregate-thresholds",
+      "title": "Sortie Indépendante Modeste",
+      "venue": "Le Balzac",
+      "venue_kind": "independent",
+      "has_team_present": false,
+      "cycle_name": null,
+      "release_year": 2026,
+      "starts_at_year": 2026,
+      "distinct_venue_count": 4,
+      "weekly_showing_count": 3,
+      "expected_special": false,
+      "notes": "Deliberately at the boundary (one above each aggregate threshold) — a modest but genuinely ordinary independent release should stay unflagged."
+    }
+  ]
+}

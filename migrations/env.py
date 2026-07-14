@@ -23,7 +23,15 @@ from cine_event_bot.core import models as _models  # noqa: F401
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False is required: fileConfig's default (True)
+    # silently disables every logger already created before this call —
+    # every cine_event_bot.* logger, since the app's own get_logger() runs at
+    # import time, well before Database.migrate_to_head() (called at the
+    # start of nearly every CLI command) reaches this line. Without this,
+    # the very first migration of a process's lifetime permanently kills all
+    # application logging (JSONL + console), including the specialness
+    # feedback-loop log in pipeline.py.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = SQLModel.metadata
 
@@ -49,6 +57,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
 
     with context.begin_transaction():
@@ -56,8 +65,17 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    """Configure the context on an open connection and run the migrations."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    """Configure the context on an open connection and run the migrations.
+
+    ``render_as_batch`` is required for SQLite: it has no ``ALTER COLUMN``,
+    so any migration that changes an existing column (nullability, type)
+    must recreate the table under the hood — Alembic's batch mode does this
+    transparently. Harmless for the ``op.add_column`` calls that don't need
+    it.
+    """
+    context.configure(
+        connection=connection, target_metadata=target_metadata, render_as_batch=True
+    )
 
     with context.begin_transaction():
         context.run_migrations()

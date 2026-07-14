@@ -1,11 +1,13 @@
 """Tests for the Rich progress reporter and console helpers."""
 
 from cine_event_bot.core.report import IngestionReport, SourceOutcome
+from cine_event_bot.core.stats import EventStats
 from cine_event_bot.io.console import (
     RichReporter,
     build_progress,
     print_banner,
     print_ingestion_summary,
+    print_stats,
 )
 
 
@@ -42,3 +44,17 @@ def test_console_helpers_do_not_raise() -> None:
         )
     )
     print_banner("test banner")
+
+
+def test_print_stats_on_an_empty_database_does_not_raise() -> None:
+    print_stats(EventStats(total=0))
+
+
+def test_print_stats_renders_venue_kind_and_specialization_rate() -> None:
+    print_stats(
+        EventStats(
+            total=4,
+            by_venue_kind={"independent": 3, "institution": 1},
+            special_count=1,
+        )
+    )

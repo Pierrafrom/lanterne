@@ -94,6 +94,50 @@ def test_build_digest_shows_the_event_type_in_french() -> None:
     assert "Ciné-concert" in message
 
 
+def test_build_digest_renders_a_clickable_booking_link_when_known() -> None:
+    event = make_display_event(
+        title="Dune",
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+        booking_url="https://example.com/tickets?id=42&seat=A1",
+    )
+
+    message = build_digest([event])
+
+    assert '<a href="https://example.com/tickets?id=42&amp;seat=A1">Réserver</a>' in (
+        message
+    )
+
+
+def test_build_digest_omits_booking_link_when_unknown() -> None:
+    event = make_display_event(
+        title="Dune",
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+        booking_url=None,
+    )
+
+    message = build_digest([event])
+
+    assert "Réserver" not in message
+
+
+def test_build_digest_escapes_html_special_characters_in_dynamic_text() -> None:
+    event = make_display_event(
+        title="Tom & Jerry",
+        venue="<Le Grand Rex>",
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+    )
+
+    message = build_digest([event])
+
+    assert "Tom &amp; Jerry" in message
+    assert "&lt;Le Grand Rex&gt;" in message
+    assert "<Le Grand Rex>" not in message
+
+
 def test_every_event_type_has_a_french_label() -> None:
     for member in EventType:
         assert event_type_label(member)
+
+
+def test_ordinary_screening_gets_a_generic_label() -> None:
+    assert event_type_label(None) == "Séance"

@@ -1,8 +1,19 @@
 # Architecture
 
-cine-event-bot aggregates special screenings in Paris/IDF from three scraped
+cine-event-bot aggregates cinema screenings in Paris/IDF from several scraped
 sources, enriches them with TMDB metadata, persists a deduplicated set, and
 exposes them through a Telegram bot (a weekly digest plus natural-language Q&A).
+
+Every screening is stored, not only special ones — see
+[ADR 0008](decisions/0008-drop-allocine-width-source.md) and
+[`coverage-matrix.md`](coverage-matrix.md) for the sourcing strategy behind
+this. `is_special` (upgraded by the rule-based specialness classifier,
+[`core/specialness.py`](../src/cine_event_bot/core/specialness.py) — see
+[ADR 0009](decisions/0009-specialness-rules-only.md) for why it is rules
+only, no LLM) separates "worth surfacing" from `event_type`, which now only
+names *which* special category a screening belongs to and is `None` for an
+ordinary screening. The weekly digest stays a curated, specials-only
+artifact; the Q&A bot searches every stored screening.
 
 Everything is **async end to end**: an aiogram event loop (and `asyncio.run` for
 the CLI) drives `httpx`, `aiosqlite`, and the Instructor/Ollama client without
@@ -29,11 +40,15 @@ flowchart TD
         dedup["dedup<br/>(compute_dedup_key)"]
         qa["qa<br/>(QueryCriteria, format_qa_answer)"]
         digest["digest"]
-        frenchfmt["frenchfmt"]
+        frenchfmt["frenchfmt<br/>(incl. booking_link_html)"]
+        specialness["specialness<br/>(classify_specialness)"]
+        venues["venues<br/>(classify_venue_kind, pass_label)"]
+        stats["stats<br/>(EventStats)"]
+        report["report<br/>(IngestionReport, build_admin_report)"]
     end
 
     subgraph io["io/ — external I/O"]
-        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Le Champo, Le Louxor, Fondation Pathé,<br/>La Villette, MK2, Paris Ciné Info)"]
+        scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Fondation Pathé, La Villette,<br/>Paris Ciné Info, offi.fr)"]
         llm["llm<br/>(EventExtractor, QuestionInterpreter)"]
         tmdb["tmdb<br/>(TmdbEnricher)"]
         repo["repository<br/>(Event, Subscriber)"]
@@ -48,12 +63,17 @@ flowchart TD
     pipeline --> scrapers
     pipeline --> tmdb
     pipeline --> repo
+    pipeline --> specialness
     scrapers --> llm
     repo --> db
+    repo --> stats
+    repo -.uses.-> venues
+    report -.uses.-> stats
     bot --> repo
     bot --> llm
     scrapers -.uses.-> models
     repo --> models
+    specialness -.uses.-> models
     qa --> frenchfmt
     digest --> frenchfmt
 ```
@@ -63,17 +83,29 @@ flowchart TD
 The persisted schema is normalized around the screening (see
 [ADR 0006](decisions/0006-relational-schema-split.md)): `Film` (one row per
 film, carrying the TMDB enrichment shared by all its screenings), `Venue` (one
-row per venue, keyed by its normalized name), and `ScreeningEvent` referencing
-both. Scrapers do not build rows directly — they produce `Sighting` objects
-(extracted facts + provenance) that `EventRepository.ingest` resolves into
-rows.
+row per venue, keyed by its normalized name, carrying a `VenueKind` used as a
+specialness prior), and `ScreeningEvent` referencing both. Scrapers do not
+build rows directly — they produce `Sighting` objects (extracted facts +
+provenance) that `EventRepository.ingest` resolves into rows.
+
+`ScreeningEvent.event_type` is nullable (`None` for an ordinary screening);
+`is_special` starts `True` at ingestion whenever a sighting already carries a
+specific `EventType` — every source predating the all-screenings expansion
+only ever produces a sighting once committed to one of the eight categories,
+so this is exact by construction, not a placeholder — and starts `False` for
+a width source reporting an ordinary showtime, upgraded later in the same
+ingestion run by the specialness classifier once the film is enriched (see
+below). `specialness_reasons` records why.
 
 ## Ingestion flow
 
-`scrape` runs every scraper, ingests each sighting, and enriches its film when
-it has no TMDB match yet. Whether a scraper used the LLM (text sources) or
-mapped structured JSON (Première Projo) is internal to it, so the pipeline
-stays uniform. A failing source is logged and skipped; a failing enrichment is
+`scrape` runs every scraper, ingests each sighting, enriches its film when it
+has no TMDB match yet, then — since the film-age/rarity rule depends on that
+enrichment — runs the rule-based specialness classifier
+([ADR 0009](decisions/0009-specialness-rules-only.md)) on any screening not
+already special. Whether a scraper used the LLM (text sources) or mapped
+structured JSON (Première Projo) is internal to it, so the pipeline stays
+uniform. A failing source is logged and skipped; a failing enrichment is
 logged and the event stays persisted.
 
 ```mermaid
@@ -83,6 +115,7 @@ sequenceDiagram
     participant S as SourceScraper
     participant R as EventRepository
     participant T as TmdbEnricher
+    participant SP as classify_specialness
 
     CLI->>P: run
     loop each scraper
@@ -96,6 +129,13 @@ sequenceDiagram
             alt film has no TMDB match yet
                 P->>T: enrich(film)
                 P->>R: save_film
+            end
+            alt event not already special
+                P->>SP: classify_specialness(event)
+                SP-->>P: verdict
+                alt a rule fired
+                    P->>R: save_event
+                end
             end
         end
     end
@@ -144,6 +184,8 @@ Recorded as ADRs in [`docs/decisions/`](decisions/):
 - [0005](decisions/0005-drop-sortiraparis.md) — dropping Sortir à Paris
 - [0006](decisions/0006-relational-schema-split.md) — Film/Venue/sighting schema split
 - [0007](decisions/0007-paris-cine-info.md) — Paris Ciné Info: authenticated, hybrid-level source
+- [0008](decisions/0008-drop-allocine-width-source.md) — dropping AlloCiné as the all-screenings width source
+- [0009](decisions/0009-specialness-rules-only.md) — specialness classification: rules only, no LLM fallback
 
 See also [`scraping-strategy.md`](scraping-strategy.md) for how a new source is
 classified and scraped.

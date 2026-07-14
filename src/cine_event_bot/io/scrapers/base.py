@@ -164,3 +164,123 @@ class SourceScraper(Protocol):
             One :class:`Sighting` per announced screening.
         """
         ...
+
+
+@runtime_checkable
+class VenuePassSource(Protocol):
+    """A source able to report which subscription passes a venue accepts.
+
+    Optional capability, not part of :class:`SourceScraper` — today only
+    Paris Ciné Info carries this data (see
+    ``io/scrapers/paris_cine_info.py::ParisCineInfoScraper.fetch_venue_passes``).
+    The pipeline detects it via ``isinstance`` against this
+    ``runtime_checkable`` Protocol (see
+    ``pipeline.py::IngestionPipeline._apply_venue_passes``) rather than
+    special-casing one source, so another source can implement it later with
+    no pipeline change.
+    """
+
+    async def fetch_venue_passes(
+        self, client: httpx.AsyncClient
+    ) -> dict[str, list[str]]:
+        """Return every known venue's accepted subscription-card codes.
+
+        Args:
+            client: Shared async HTTP client used for every request.
+
+        Returns:
+            A mapping of venue display name to its accepted card codes (see
+            ``core/venues.py``'s ``pass_label``); a venue with no known
+            accepted pass is omitted rather than mapped to an empty list.
+        """
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class VenueDetail:
+    """Cinema/room-level facts about one venue, beyond its name and kind.
+
+    Attributes:
+        address: Street address, when known.
+        website: Official website URL, when known.
+        seat_count: Number of seats in the room, when known and unambiguous
+            (see :class:`VenueDetailSource`).
+        screen_width_m: Screen width in metres, same caveat as ``seat_count``.
+        screen_height_m: Screen height in metres, same caveat as ``seat_count``.
+    """
+
+    address: str | None = None
+    website: str | None = None
+    seat_count: int | None = None
+    screen_width_m: float | None = None
+    screen_height_m: float | None = None
+
+
+@runtime_checkable
+class VenueDetailSource(Protocol):
+    """A source able to report room-level detail about a venue.
+
+    Optional capability, not part of :class:`SourceScraper` — today only
+    Paris Ciné Info carries this data (see
+    ``io/scrapers/paris_cine_info.py::ParisCineInfoScraper.fetch_venue_details``).
+    Detected the same way as :class:`VenuePassSource`: via ``isinstance``
+    against this ``runtime_checkable`` Protocol (see
+    ``pipeline.py::IngestionPipeline._apply_venue_details``).
+    """
+
+    async def fetch_venue_details(
+        self, client: httpx.AsyncClient
+    ) -> dict[str, VenueDetail]:
+        """Return every known venue's address/website/room detail.
+
+        Args:
+            client: Shared async HTTP client used for every request.
+
+        Returns:
+            A mapping of venue display name to its :class:`VenueDetail`; a
+            venue with nothing known is omitted rather than mapped to an
+            empty/default instance.
+        """
+        ...
+
+
+def scan_balanced(
+    text: str, start: int, *, open_char: str, close_char: str
+) -> str | None:
+    """Return the balanced-delimiter substring starting at ``text[start]``.
+
+    Tracks string state so a delimiter inside a JSON string value does not
+    affect the depth count. Pulls one JSON value out of a larger embedded-JS
+    blob rather than parsing the whole page as JSON — see
+    ``io/scrapers/paris_cine_info.py``'s ``parse_venue_passes`` (``[``/``]``,
+    the ``const cineOptions = [...]`` catalogue array).
+
+    Args:
+        text: The text to scan.
+        start: Index of the opening delimiter (``text[start] == open_char``).
+        open_char: The opening delimiter, e.g. ``"{"`` or ``"["``.
+        close_char: The matching closing delimiter, e.g. ``"}"`` or ``"]"``.
+
+    Returns:
+        The balanced substring (including both delimiters), or ``None`` when
+        the text ends before the depth returns to zero.
+    """
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            in_string = not in_string
+        elif not in_string:
+            if char == open_char:
+                depth += 1
+            elif char == close_char:
+                depth -= 1
+                if depth == 0:
+                    return text[start : index + 1]
+    return None

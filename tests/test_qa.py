@@ -15,7 +15,7 @@ async def _ingest(
     *,
     title: str,
     starts_at: datetime,
-    event_type: EventType = EventType.AVANT_PREMIERE,
+    event_type: EventType | None = EventType.AVANT_PREMIERE,
     has_team_present: bool = False,
     overview: str | None = None,
 ) -> ScreeningEvent:
@@ -47,6 +47,29 @@ def test_format_qa_answer_lists_matches_with_date_and_venue() -> None:
     assert "Dune" in answer
     assert "Le Grand Rex" in answer
     assert "mardi 7 juillet à 20h30" in answer.lower()
+
+
+def test_format_qa_answer_renders_a_clickable_booking_link_when_known() -> None:
+    event = make_display_event(
+        title="Dune",
+        starts_at=datetime(2026, 7, 7, 18, 30, tzinfo=UTC),
+        booking_url="https://example.com/tickets",
+    )
+
+    answer = format_qa_answer([event])
+
+    assert '<a href="https://example.com/tickets">Réserver</a>' in answer
+
+
+def test_format_qa_answer_escapes_html_special_characters_in_dynamic_text() -> None:
+    event = make_display_event(
+        title="Tom & Jerry",
+        starts_at=datetime(2026, 7, 7, 18, 30, tzinfo=UTC),
+    )
+
+    answer = format_qa_answer([event])
+
+    assert "Tom &amp; Jerry" in answer
 
 
 async def test_search_filters_by_event_type(session: AsyncSession) -> None:
@@ -146,3 +169,31 @@ def test_format_qa_answer_shows_the_event_type_in_french() -> None:
     answer = format_qa_answer([event])
 
     assert "Séance culte" in answer
+
+
+def test_format_qa_answer_shows_an_ordinary_screening_with_a_generic_label() -> None:
+    event = make_display_event(
+        title="Toy Story 5",
+        event_type=None,
+        is_special=False,
+        starts_at=datetime(2026, 7, 7, 20, 0, tzinfo=UTC),
+    )
+
+    answer = format_qa_answer([event])
+
+    assert "Toy Story 5" in answer
+    assert "Séance" in answer
+
+
+async def test_search_returns_ordinary_screenings_too(session: AsyncSession) -> None:
+    repo = EventRepository(session)
+    await _ingest(
+        repo,
+        title="Toy Story 5",
+        starts_at=datetime(2026, 7, 7, 18, 0, tzinfo=UTC),
+        event_type=None,
+    )
+
+    results = await repo.search(QueryCriteria())
+
+    assert [event.film.title for event in results] == ["Toy Story 5"]

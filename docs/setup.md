@@ -79,14 +79,16 @@ screenings are skipped, and per-source extraction runs with bounded concurrency.
 `uv sync` installs a `cine-event-bot` console entry point, so commands are:
 
 ```fish
-uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
-uv run cine-event-bot stats           # summary of stored events
-uv run cine-event-bot weekly-digest   # broadcast the week's digest
-uv run cine-event-bot run-bot         # start the Telegram bot
-uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
-uv run cine-event-bot eval-extraction # score the LLM on the golden dataset
-uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
-uv run cine-event-bot --help          # list every command
+uv run cine-event-bot scrape           # scrape + enrich + persist (idempotent)
+uv run cine-event-bot stats            # summary of stored events
+uv run cine-event-bot weekly-digest    # broadcast the week's digest
+uv run cine-event-bot run-bot          # start the Telegram bot
+uv run cine-event-bot backup-db        # timestamped snapshot into ./backups/
+uv run cine-event-bot prune-db         # delete ordinary screenings older than 14 days
+uv run cine-event-bot eval-extraction  # score the LLM on the golden dataset
+uv run cine-event-bot eval-specialness # score the specialness classifier
+uv run cine-event-bot reset-db --yes   # drop + recreate all tables (wipes data)
+uv run cine-event-bot --help           # list every command
 ```
 
 (`uv run python -m cine_event_bot <command>` still works identically.)
@@ -97,8 +99,15 @@ repeatedly never creates duplicates — it refreshes and enriches in place (see
 want a truly empty database.
 
 `run-bot` answers `/start` (subscribe), `/stop` (unsubscribe), and any other
-message as a natural-language question. Schedule `scrape` and `weekly-digest`
-with cron (or any scheduler) for unattended operation.
+message as a natural-language question. Schedule `scrape`, `weekly-digest`,
+and `prune-db` with cron (or any scheduler) for unattended operation —
+`prune-db` deletes ordinary (`is_special=False`) screenings that started more
+than 14 days ago, keeping the database bounded now that the width sources
+(Paris Ciné Info, offi.fr — see [ADR 0008](decisions/0008-drop-allocine-width-source.md))
+report every screening, not only special ones. Special screenings are never
+pruned, regardless of age. Run it right after `scrape` in the same weekly
+job, as its own step — not auto-chained inside `scrape` — same posture as
+`backup-db`.
 
 ## Database schema, migrations, and backups
 

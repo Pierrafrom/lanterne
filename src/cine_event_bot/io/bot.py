@@ -6,15 +6,20 @@ message — is kept as plain async functions. The aiogram wiring
 update and delegates to those functions.
 
 User-facing replies are in French (French-speaking Parisian audience; see the
-project ``CLAUDE.md``).
+project ``CLAUDE.md``). The digest and Q&A answers (``core/digest.py``,
+``core/qa.py``) render clickable "Réserver" links as HTML, so every outgoing
+message here uses Telegram's HTML parse mode, with link previews disabled —
+otherwise a big preview card would render per link in a message that can list
+several screenings at once.
 """
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from aiogram import Bot, Dispatcher, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import LinkPreviewOptions, Message
 
 from cine_event_bot.core.qa import format_qa_answer
 from cine_event_bot.io.db import Database
@@ -29,6 +34,7 @@ _SUBSCRIBED = (
     "Envoyez /stop pour vous désabonner."
 )
 _UNSUBSCRIBED = "Vous êtes désabonné·e du digest. À bientôt !"
+_NO_LINK_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 async def handle_subscribe(chat_id: int, repository: SubscriberRepository) -> str:
@@ -97,12 +103,12 @@ async def handle_question(
 
 
 async def broadcast(bot: Bot, chat_ids: Sequence[int], text: str) -> int:
-    """Send a message to every chat, skipping (and logging) failed sends.
+    """Send an HTML message to every chat, skipping (and logging) failed sends.
 
     Args:
         bot: The Telegram bot used to send messages.
         chat_ids: Chats to deliver the message to.
-        text: The message body.
+        text: The HTML-formatted message body (see ``core/digest.py``).
 
     Returns:
         The number of chats the message was successfully sent to.
@@ -110,7 +116,12 @@ async def broadcast(bot: Bot, chat_ids: Sequence[int], text: str) -> int:
     sent = 0
     for chat_id in chat_ids:
         try:
-            await bot.send_message(chat_id, text)
+            await bot.send_message(
+                chat_id,
+                text,
+                parse_mode=ParseMode.HTML,
+                link_preview_options=_NO_LINK_PREVIEW,
+            )
         except Exception:
             logger.exception("digest send failed", extra={"ctx": {"chat_id": chat_id}})
         else:
@@ -162,7 +173,9 @@ def build_dispatcher(
                 EventRepository(session),
                 datetime.now(UTC),
             )
-        await message.answer(reply)
+        await message.answer(
+            reply, parse_mode=ParseMode.HTML, link_preview_options=_NO_LINK_PREVIEW
+        )
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
