@@ -3,8 +3,19 @@
 :func:`build_scrapers` is the factory the ingestion pipeline calls to get every
 source's scraper, injecting the LLM extractor into the text-based ones and the
 account credentials into the authenticated one. Structured sources (Première
-Projo) take no extractor; Paris Ciné Info is skipped entirely when its
-credentials are not configured (see ``docs/setup.md``).
+Projo, offi.fr) take no extractor; Paris Ciné Info is skipped entirely when
+its credentials are not configured (see ``docs/setup.md``).
+
+MK2, Le Louxor, and Le Champo are deliberately **not** registered here —
+retired in favor of Paris Ciné Info's full coverage of all three, confirmed
+live (not just "listed in the network") after the earlier live spot-check
+turned out to have false negatives from fragmented venue naming and an
+exact-timestamp dedup key; see
+[ADR 0011](../../../docs/decisions/0011-retire-mk2-louxor.md) for MK2/Le
+Louxor and [ADR 0012](../../../docs/decisions/0012-retire-lechampo.md) for Le
+Champo. The ``Source.MK2``/``Source.LE_LOUXOR``/``Source.LE_CHAMPO`` enum
+members and their historical ``EventSighting`` rows are kept — only the
+scrapers producing new ones are removed.
 """
 
 from cine_event_bot.io.llm import EventExtractor
@@ -13,9 +24,7 @@ from cine_event_bot.io.scrapers.cinematheque import CinemathequeScraper
 from cine_event_bot.io.scrapers.fondationpathe import FondationPatheScraper
 from cine_event_bot.io.scrapers.forumdesimages import ForumDesImagesScraper
 from cine_event_bot.io.scrapers.lavillette import LaVilletteScraper
-from cine_event_bot.io.scrapers.lechampo import LeChampoScraper
-from cine_event_bot.io.scrapers.louxor import LeLouxorScraper
-from cine_event_bot.io.scrapers.mk2 import Mk2Scraper
+from cine_event_bot.io.scrapers.offi import OffiScraper
 from cine_event_bot.io.scrapers.paris_cine_info import ParisCineInfoScraper
 from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
 
@@ -46,11 +55,9 @@ def build_scrapers(
         CinemathequeScraper(extractor),
         PremiereProjoScraper(),
         ForumDesImagesScraper(extractor),
-        LeChampoScraper(extractor),
-        LeLouxorScraper(extractor),
         FondationPatheScraper(extractor),
         LaVilletteScraper(extractor),
-        Mk2Scraper(),
+        OffiScraper(),
     ]
     if paris_cine_info_login and paris_cine_info_password:
         scrapers.append(
@@ -66,9 +73,7 @@ __all__ = [
     "FondationPatheScraper",
     "ForumDesImagesScraper",
     "LaVilletteScraper",
-    "LeChampoScraper",
-    "LeLouxorScraper",
-    "Mk2Scraper",
+    "OffiScraper",
     "ParisCineInfoScraper",
     "PremiereProjoScraper",
     "RawListing",

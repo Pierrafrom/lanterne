@@ -5,15 +5,35 @@
 
 ## What this project does
 
-Auto-hosted Telegram bot that aggregates **special screenings** in Paris/IDF
-(avant-premières with team, cine-concerts, retrospectives, open-air,
-festivals, cult screenings, ciné-clubs, short-film programmes) from nine
-scraped sources (Première Projo, MK2, La Cinémathèque française, Le Forum
-des images, Le Champo, Le Louxor, la Fondation Jérôme Seydoux-Pathé,
-La Villette, Paris Ciné Info — the last an optional, authenticated source,
-see [ADR 0007](docs/decisions/0007-paris-cine-info.md); see also
-`docs/scraping-strategy.md`), sends a weekly digest, and answers
-natural-language questions about programmed films using TMDB data.
+Auto-hosted Telegram bot for cinema screenings in Paris/IDF: a weekly digest
+of curated **special screenings** (avant-premières with team, cine-concerts,
+retrospectives, open-air, festivals, cult screenings, ciné-clubs, short-film
+programmes), and a natural-language Q&A over every stored screening using
+TMDB data.
+
+The database is being expanded from "special screenings only" to "every
+screening, with specialness detected after ingestion" — see
+[ADR 0008](docs/decisions/0008-drop-allocine-width-source.md) and
+[`docs/coverage-matrix.md`](docs/coverage-matrix.md) for the sourcing
+strategy and rollout plan. Seven scrapers are wired in: five venue-specific
+sources (Première Projo, La Cinémathèque française, Le Forum des images, la
+Fondation Jérôme Seydoux-Pathé, La Villette — MK2, Le Louxor, and Le Champo
+were **retired** in favor of confirmed Paris Ciné Info coverage; see
+[ADR 0011](docs/decisions/0011-retire-mk2-louxor.md) and
+[ADR 0012](docs/decisions/0012-retire-lechampo.md)) still only report
+special screenings, plus two **width sources** covering every screening at
+their venues: Paris Ciné Info (Paris intra-muros, optional/authenticated —
+see [ADR 0007](docs/decisions/0007-paris-cine-info.md)) and offi.fr (the
+Île-de-France suburbs). A width-source screening starts `is_special=False`
+and is upgraded by the rule-based specialness classifier
+(`core/specialness.py`, run as a single end-of-run batch pass over every
+currently-ordinary screening — see
+[ADR 0009](docs/decisions/0009-specialness-rules-only.md)) when team
+presence, a cycle name, an institution venue, or film age/rarity signals
+it; every classified screening's verdict is also logged as structured
+JSONL for building a real evaluation dataset over time. `prune-db` deletes
+ordinary screenings older than 14 days (never a special one) — schedule it
+after `scrape` in the weekly cron. See also `docs/scraping-strategy.md`.
 
 ## Architecture
 
@@ -26,8 +46,8 @@ aiogram (event loop)
    └── SQLModel (async session, aiosqlite) → read/write events
 
 Weekly cron (Typer CLI, asyncio.run())
-   ├── httpx.AsyncClient → scrape 4 sources
-   ├── Instructor (async) → Ollama → structure events
+   ├── httpx.AsyncClient → scrape every configured source
+   ├── Instructor (async) → Ollama → structure events (text sources only)
    └── SQLModel (async session) → insert + deduplication
 ```
 
@@ -80,6 +100,7 @@ uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
 uv run cine-event-bot stats           # summary of stored events
 uv run cine-event-bot weekly-digest   # broadcast the week's digest
 uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
+uv run cine-event-bot prune-db        # delete ordinary screenings older than 14 days
 uv run cine-event-bot run-bot         # start the Telegram bot
 uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
 ```

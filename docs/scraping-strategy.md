@@ -24,13 +24,13 @@ flowchart TD
     E -- no --> L5[Level 5: headless browser · last resort]
 ```
 
-| Level | Source shape                                                            | Technique                                                                 | LLM?    |
-| ----- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------- |
-| 1     | iCal / RSS / Atom                                                       | Parse the feed, map fields                                                | No      |
-| 2     | JSON API (public or internal XHR)                                       | Call it, map fields                                                       | No      |
-| 3     | JSON embedded in SSR HTML (Next.js RSC, `__NEXT_DATA__`, Nuxt, JSON-LD) | Extract & parse the JSON, map fields                                      | No      |
-| 4     | Classic server-rendered HTML                                            | `BeautifulSoup` selectors locate per-event text                           | **Yes** |
-| 5     | Pure SPA, no data in HTML                                               | Identify the XHR (→ Level 2); headless browser only if nothing else works | Depends |
+| Level | Source shape                                                            | Technique                                                                 | LLM?                                                                                                |
+| ----- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 1     | iCal / RSS / Atom                                                       | Parse the feed, map fields                                                | No                                                                                                  |
+| 2     | JSON API (public or internal XHR)                                       | Call it, map fields                                                       | No                                                                                                  |
+| 3     | JSON embedded in SSR HTML (Next.js RSC, `__NEXT_DATA__`, Nuxt, JSON-LD) | Extract & parse the JSON, map fields                                      | No                                                                                                  |
+| 4     | Classic server-rendered HTML                                            | `BeautifulSoup` selectors locate per-event text                           | Usually — prose needs interpreting; a fully tabular DOM (e.g. offi.fr) can still be mapped directly |
+| 5     | Pure SPA, no data in HTML                                               | Identify the XHR (→ Level 2); headless browser only if nothing else works | Depends                                                                                             |
 
 ## Cross-cutting rules (any level)
 
@@ -40,9 +40,11 @@ flowchart TD
 - **Anchor on the most stable thing.** Business JSON keys (`avpType`, `title`)
   outlast generated CSS classes (Tailwind / CSS-modules); semantic attributes
   (`data-*`, `itemprop`) outlast styling classes.
-- **LLM only for genuinely unstructured data (Level 4).** Running it over
-  already-structured JSON wastes tokens and reintroduces hallucination and
-  non-determinism — a regression. See [ADR 0004](decisions/0004-rsc-extraction-and-pipeline.md).
+- **LLM only for genuinely unstructured data.** Running it over
+  already-structured JSON (Level 2/3) or a fully tabular HTML DOM with no
+  prose to interpret (offi.fr, despite being Level 4) wastes tokens and
+  reintroduces hallucination and non-determinism — a regression. See
+  [ADR 0004](decisions/0004-rsc-extraction-and-pipeline.md).
 - **Fail loudly in tests, softly in prod.** A schema change must break a parsing
   test (the early-warning signal); at runtime the scraper logs a warning and
   returns `[]` so one broken source never aborts the pipeline.
@@ -51,17 +53,18 @@ flowchart TD
 
 ## Current source classification
 
-| Source                            | Level          | Status                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------- | -------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| La Cinémathèque française         | 4              | Implemented            | Homepage `a.event` → `/seance/` detail pages → text → LLM                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Première Projo                    | 3              | Implemented            | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM                                                                                                                                                                                                                                                                                                                                                                                     |
-| Forum des images                  | 4              | Implemented            | `/agenda` cards (cycle, title, director, date) → text → LLM; year-less dates resolved against a reference date                                                                                                                                                                                                                                                                                                                                                     |
-| Le Champo                         | 4              | Implemented            | `/evenements/cine-clubs.html` — single hand-authored CMS article; each cycle's `div.uk-panel.uk-margin` block is one listing, kept only when it contains a "📍"-marked date; booking link taken from the immediately following sibling block                                                                                                                                                                                                                       |
-| Le Louxor                         | 4              | Implemented            | `/evenements/` index → per-event dossier pages, each a multi-film retrospective article (not one screening); a film's block runs from its all-caps title to the next, anchored on the "France I YYYY I duration" metadata line, kept only when it contains a "→"-marked date                                                                                                                                                                                       |
-| Fondation Jérôme Seydoux-Pathé    | 4              | Implemented            | `/agenda` tile grid mixes screenings, cycles (curatorial essays, no screening time of their own), workshops, exhibitions; kept only when a tile's semicolon-separated category tags include "SÉANCES" (covers combined tags like "SÉANCES ; JEUNE-PUBLIC" too). Full `DD/MM/YYYY - HH:MM` dates, no reference-date hint needed, no detail-page visit                                                                                                               |
-| La Villette (Cinéma en plein air) | 4              | Implemented            | Single seasonal page, day-grouped; anchored on the ", <director> • <year>" metadata line (same technique as Le Louxor) to find each title; the fixed 18h00/21h00 daily schedule is read per film from the "SÉANCE JEUNE PUBLIC" label rather than by position, so a day with only one film is still correct                                                                                                                                                        |
-| Paris Ciné Info                   | 2 + 4 (hybrid) | Implemented, optional  | Authenticated JSON API (`get_movies.php?events=true` + `get_showtimes.php`, no LLM) across dozens of Paris cinemas at once; only the per-showtime `com` free-text field goes through the LLM. Requires a personal account (`PARIS_CINE_INFO_LOGIN`/`PASSWORD`); skipped entirely when unset. See [ADR 0007](decisions/0007-paris-cine-info.md)                                                                                                                     |
-| MK2                               | 3              | Implemented, known gap | Confirmed Next.js RSC JSON (same mechanism as Première Projo, no LLM); each event already carries a machine-readable `type.id` and an `"equipe-du-film"` genre tag for team presence. Only `avant-premiere`/`festival` types are mapped. **Confirmed live**: events spanning several MK2 cinemas (routinely 4-5 at once) only carry one `nextSession` — the other venues' screenings are logged as a warning, not silently dropped, but are not currently captured |
+| Source                            | Level          | Status                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------- | -------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| La Cinémathèque française         | 4              | Implemented           | Homepage `a.event` → `/seance/` detail pages → text → LLM                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Première Projo                    | 3              | Implemented           | Next.js RSC JSON; `avpType` = `AVP`/`AVPE` (team present) → direct map, no LLM                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Forum des images                  | 4              | Implemented           | `/agenda` cards (cycle, title, director, date) → text → LLM; year-less dates resolved against a reference date                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Le Champo                         | 4              | Retired (ADR 0012)    | `/evenements/cine-clubs.html` — single hand-authored CMS article; each cycle's `div.uk-panel.uk-margin` block was one listing, kept only when it contained a "📍"-marked date; booking link taken from the immediately following sibling block. Retired once Paris Ciné Info's own coverage was confirmed live (89 current showtimes) — see [ADR 0012](decisions/0012-retire-lechampo.md)                                                                                                                                                                                                                                                                                                                       |
+| Le Louxor                         | 4              | Retired (ADR 0011)    | `/evenements/` index → per-event dossier pages, each a multi-film retrospective article (not one screening); a film's block ran from its all-caps title to the next, anchored on the "France I YYYY I duration" metadata line, kept only when it contained a "→"-marked date. Retired once Paris Ciné Info's own coverage was confirmed live — see [ADR 0011](decisions/0011-retire-mk2-louxor.md)                                                                                                                                                                                                                                                                                                              |
+| Fondation Jérôme Seydoux-Pathé    | 4              | Implemented           | `/agenda` tile grid mixes screenings, cycles (curatorial essays, no screening time of their own), workshops, exhibitions; kept only when a tile's semicolon-separated category tags include "SÉANCES" (covers combined tags like "SÉANCES ; JEUNE-PUBLIC" too). Full `DD/MM/YYYY - HH:MM` dates, no reference-date hint needed, no detail-page visit                                                                                                                                                                                                                                                                                                                                                            |
+| La Villette (Cinéma en plein air) | 4              | Implemented           | Single seasonal page, day-grouped; anchored on the ", <director> • <year>" metadata line (same technique as Le Louxor) to find each title; the fixed 18h00/21h00 daily schedule is read per film from the "SÉANCE JEUNE PUBLIC" label rather than by position, so a day with only one film is still correct                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Paris Ciné Info                   | 2 + 4 (hybrid) | Implemented, optional | Authenticated JSON API (`get_movies.php` — full catalogue, no filter — + `get_showtimes.php`, no LLM) across dozens of Paris cinemas at once; only the per-showtime `com` free-text field goes through the LLM. An uncommented showtime is stored directly as an ordinary screening (`event_type=None`), no LLM call. Requires a personal account (`PARIS_CINE_INFO_LOGIN`/`PASSWORD`); skipped entirely when unset. See [ADR 0007](decisions/0007-paris-cine-info.md) and [ADR 0008](decisions/0008-drop-allocine-width-source.md)                                                                                                                                                                             |
+| MK2                               | 3              | Retired (ADR 0011)    | Confirmed Next.js RSC JSON (same mechanism as Première Projo, no LLM); each event already carried a machine-readable `type.id` and an `"equipe-du-film"` genre tag for team presence. Only `avant-premiere`/`festival` types were mapped. **Confirmed live**: events spanning several MK2 cinemas (routinely 4-5 at once) only carried one `nextSession` — the other venues' screenings were logged as a warning, not silently dropped, but were never captured. Retired once Paris Ciné Info's coverage of all 11 rooms was confirmed live — see [ADR 0011](decisions/0011-retire-mk2-louxor.md)                                                                                                               |
+| offi.fr                           | 4 (no LLM)     | Implemented           | Île-de-France suburb complement to Paris Ciné Info's Paris intra-muros network (see [ADR 0008](decisions/0008-drop-allocine-width-source.md)); one paginated listing page per department links every venue, each venue's own page is a fully tabular DOM (`itemscope itemtype="schema.org/Movie"` tiles, `HH:MM` badges) mapped directly — no LLM, since there is no prose to interpret. Dates are computed from the fetch date and the page's day-tab index (`#t_0`..`#t_7`, verified sequential), never parsed from the printed day-name text. Every screening is ordinary (`event_type=None`) — offi.fr carries no specialness signal of its own. See [`offi.py`](../src/cine_event_bot/io/scrapers/offi.py) |
 
 Sortir à Paris was evaluated and **dropped from the MVP** — it is an editorial
 news site with no structured screenings agenda; see
@@ -93,14 +96,16 @@ authorization/respectful-use reasoning.
 **Suggested implementation order** (no-LLM levels first, per the rule above):
 
 1. ~~Paris Ciné Info~~ — done, see [ADR 0007](decisions/0007-paris-cine-info.md).
-1. ~~Le Champo~~ — done, see [`lechampo.py`](../src/cine_event_bot/io/scrapers/lechampo.py).
-1. ~~Le Louxor~~ — done, see [`louxor.py`](../src/cine_event_bot/io/scrapers/louxor.py).
+1. ~~Le Champo~~ — done, later retired, see [ADR 0012](decisions/0012-retire-lechampo.md).
+1. ~~Le Louxor~~ — done, later retired, see [ADR 0011](decisions/0011-retire-mk2-louxor.md).
 1. ~~Fondation Jérôme Seydoux-Pathé~~ — done, see
    [`fondationpathe.py`](../src/cine_event_bot/io/scrapers/fondationpathe.py).
 1. ~~La Villette~~ — done, see
    [`lavillette.py`](../src/cine_event_bot/io/scrapers/lavillette.py).
-1. ~~MK2~~ — done (confirmed Level 3), see
-   [`mk2.py`](../src/cine_event_bot/io/scrapers/mk2.py).
+1. ~~MK2~~ — done (confirmed Level 3), later retired, see
+   [ADR 0011](decisions/0011-retire-mk2-louxor.md).
+1. ~~offi.fr~~ — done (Level 4, no LLM — fully tabular), see
+   [`offi.py`](../src/cine_event_bot/io/scrapers/offi.py).
 1. **Allociné avant-première** — evaluate whether the volume gain is worth
    it (see note below) before committing.
 1. **Le Grand Rex** — blocked until a cinema/avant-première event is live to
@@ -161,30 +166,37 @@ as a primary discovery source.
   `EventExtractor` (LLM) structures it. See
   [`cinematheque.py`](../src/cine_event_bot/io/scrapers/cinematheque.py).
 - **Hybrid Level 2 + 4 — Paris Ciné Info.** Discovery is a real, authenticated
-  JSON API (`get_movies.php?events=true` then `get_showtimes.php` — film,
-  venue, exact time, booking link, no LLM), but each showtime's free-text
-  `com` field still needs the LLM to classify `event_type`/`cycle_name`/
-  `has_team_present`; a showtime with no comment is skipped rather than
-  guessed at. See [`paris_cine_info.py`](../src/cine_event_bot/io/scrapers/paris_cine_info.py)
-  and [ADR 0007](decisions/0007-paris-cine-info.md).
-- **Level 4 — Le Champo.** A single hand-authored CMS article, not a feed of
-  cards: each cycle's block is kept only when it contains a human-authored
-  "📍" pin marking its next date, and the booking link (when one exists) sits
-  in the following sibling block rather than nested inside. Anchoring on the
-  pin emoji rather than CSS classes matches the "anchor on the most stable
-  thing" rule — `uk-panel uk-margin` is a generic YOOtheme utility class,
-  reused all over the page, but the pin is a convention the site's own
-  editors chose and keep using. See
-  [`lechampo.py`](../src/cine_event_bot/io/scrapers/lechampo.py).
-- **Level 4 — Le Louxor.** One event page is not one screening: a
+  JSON API (`get_movies.php` — the full catalogue, not just the site's own
+  "événement" flag — then `get_showtimes.php` — film, venue, exact time,
+  booking link, no LLM), but each showtime's free-text `com` field, when
+  present, still needs the LLM to classify `event_type`/`cycle_name`/
+  `has_team_present`; a showtime with no comment is stored directly as an
+  ordinary screening rather than guessed at or dropped. See
+  [`paris_cine_info.py`](../src/cine_event_bot/io/scrapers/paris_cine_info.py),
+  [ADR 0007](decisions/0007-paris-cine-info.md), and
+  [ADR 0008](decisions/0008-drop-allocine-width-source.md).
+- **Level 4 — Le Champo (retired, see [ADR 0012](decisions/0012-retire-lechampo.md)).**
+  A single hand-authored CMS article, not a feed of cards: each cycle's block
+  was kept only when it contained a human-authored "📍" pin marking its next
+  date, and the booking link (when one existed) sat in the following sibling
+  block rather than nested inside. Anchoring on the pin emoji rather than CSS
+  classes matched the "anchor on the most stable thing" rule —
+  `uk-panel uk-margin` is a generic YOOtheme utility class, reused all over
+  the page, but the pin was a convention the site's own editors chose and
+  kept using. Retired after live evidence confirmed Paris Ciné Info reports
+  Le Champo's full programme directly (89 current showtimes) — the year-less
+  "📍" date also turned out to be an unreliable thing to ask the LLM to
+  resolve against a reference date, a bug this retirement made moot rather
+  than fixed.
+- **Level 4 — Le Louxor (retired, see [ADR 0011](decisions/0011-retire-mk2-louxor.md)).**
+  One event page is not one screening: a
   retrospective dossier names several films in a single long-form article,
   each with its own critic quote and "→"-marked date. Anchored on a template
   convention rather than CSS: the metadata line ("France I 1996 I 1h53") is
   distinctive enough that the line right before it is reliably that film's
   title, letting the page be split into one block per film. Verified against
   all three live dossiers (6, 6, and 10 films) before committing to the
-  heuristic. See
-  [`louxor.py`](../src/cine_event_bot/io/scrapers/louxor.py).
+  heuristic.
 - **Level 4 — Fondation Jérôme Seydoux-Pathé.** One tile grid mixes
   screenings with cycles, exhibitions, and workshops; the semicolon-separated
   category tag on each tile (checked for "SÉANCES" as one of possibly several
@@ -199,7 +211,8 @@ as a primary discovery source.
   day with only one film. Verified against the live page (35 screenings
   across 19 days). See
   [`lavillette.py`](../src/cine_event_bot/io/scrapers/lavillette.py).
-- **Level 3 — MK2.** Same RSC-embedded-JSON mechanism as Première Projo (see
+- **Level 3 — MK2 (retired, see [ADR 0011](decisions/0011-retire-mk2-louxor.md)).**
+  Same RSC-embedded-JSON mechanism as Première Projo (see
   ADR 0004), no LLM. The real find: each event already carries a
   machine-readable `type.id` and, when the film's team attends, an
   `"equipe-du-film"` genre tag — exactly the `has_team_present` signal other
@@ -215,5 +228,18 @@ as a primary discovery source.
   today. Rather than fabricate an assumed-identical time for the other
   venues, a multi-cinema event logs a warning instead — the full per-cinema
   schedule lives behind a client-side call, same class of gap as UGC's
-  JS-rendered events page, deferred for the same reason. See
-  [`mk2.py`](../src/cine_event_bot/io/scrapers/mk2.py).
+  JS-rendered events page, deferred for the same reason — moot after
+  retirement, since Paris Ciné Info's coverage made the gap irrelevant.
+- **Level 4, no LLM — offi.fr.** A deliberate deviation from the "Level 4 →
+  LLM" rule of thumb: the per-venue programme is a fully tabular DOM
+  (`itemscope itemtype="schema.org/Movie"` tiles, `HH:MM` badges), not prose
+  to interpret, so it is mapped directly — the same "don't run an LLM over
+  already-structured data" reasoning that keeps Première Projo and MK2 off
+  the LLM path applies equally to a tabular DOM. The date is never printed
+  with a year (only "Lundi 13 Juillet"); rather than parse that text, the
+  page's eight day tabs (`#t_0`..`#t_7`) were verified live to always be
+  sequential days starting from the fetch date, so the date is computed by
+  arithmetic instead. Discovery walks one paginated listing page per
+  Île-de-France suburb department (Paris intra-muros is Paris Ciné Info's
+  job — see ADR 0008) to find every venue's own page. See
+  [`offi.py`](../src/cine_event_bot/io/scrapers/offi.py).

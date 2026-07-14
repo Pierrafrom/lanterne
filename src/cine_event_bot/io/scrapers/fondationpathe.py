@@ -9,8 +9,9 @@ category tags (e.g. ``SÉANCES``, ``SÉANCES ; JEUNE-PUBLIC``, ``CYCLES``,
 screenings and are scraped.
 
 Full dates are given with the year (``DD/MM/YYYY - HH:MM``), so — unlike
-Le Champo or Le Louxor — no reference-date hint is needed, and the tile's own
-text (title, director, year) is enough context with no detail-page visit.
+Le Forum des images or La Villette — no reference-date hint is needed, and
+the tile's own text (title, director, year) is enough context with no
+detail-page visit.
 """
 
 import httpx
