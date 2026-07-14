@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from cine_event_bot.core.report import IngestionReport, SourceOutcome
-from cine_event_bot.io.repository import EventStats
+from cine_event_bot.core.stats import EventStats
 from cine_event_bot.logging_config import JsonlFormatter, get_logger
 from cine_event_bot.main import app, get_greeting
 
@@ -55,6 +55,25 @@ def test_stats_command_prints_total(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert "169" in result.output
+
+
+def test_eval_specialness_command_scores_the_golden_dataset() -> None:
+    # No mocking needed: the classifier and dataset are pure, in-memory data.
+    result = CliRunner().invoke(app, ["eval-specialness"])
+
+    assert result.exit_code == 0
+    assert "Accuracy" in result.output
+
+
+def test_prune_db_command_reports_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_prune() -> int:
+        return 42
+
+    monkeypatch.setattr("cine_event_bot.main._prune_db", fake_prune)
+    result = CliRunner().invoke(app, ["prune-db"])
+
+    assert result.exit_code == 0
+    assert "42" in result.output
 
 
 def test_reset_db_command_runs_with_yes(monkeypatch: pytest.MonkeyPatch) -> None:

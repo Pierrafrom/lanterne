@@ -1,4 +1,4 @@
-"""Domain models for special screenings, LLM extraction, and subscribers.
+"""Domain models for cinema screenings, LLM extraction, and subscribers.
 
 The extraction contract and the persisted schema are deliberately separate
 types (see ``docs/decisions/0001-event-model-split.md``), and the persisted
@@ -13,7 +13,11 @@ schema is normalized around the screening (see
   TMDB enrichment.
 - :class:`Venue` — one row per venue, keyed by its normalized name.
 - :class:`ScreeningEvent` — the persisted screening, referencing its film and
-  venue and holding the deduplication key.
+  venue and holding the deduplication key. Every screening is stored, not
+  only special ones (see ``docs/decisions/0008-drop-allocine-width-source.md``
+  and ``docs/coverage-matrix.md``); ``is_special`` and ``event_type``
+  (nullable — ``None`` for an ordinary screening) separate "is this worth
+  surfacing" from "which kind of special screening is this".
 - :class:`EventSighting` — one (event, source) provenance row, recording every
   source that reported a screening.
 - :class:`Subscriber` — a Telegram chat opted in to the weekly digest.
@@ -96,6 +100,25 @@ class Source(StrEnum):
     FONDATION_PATHE = "fondation-jeromeseydoux-pathe.com"
     LA_VILLETTE = "lavillette.com"
     MK2 = "mk2.com"
+    OFFI = "offi.fr"
+
+
+class VenueKind(StrEnum):
+    """Broad category of a venue, used as a prior signal for specialness.
+
+    A patrimonial institution or an independent/arthouse cinema is more
+    likely to be showing something worth surfacing than a chain multiplex's
+    average Tuesday-evening screening — see
+    ``docs/decisions/0008-drop-allocine-width-source.md`` and the
+    specialness classification pipeline (``core/specialness/``).
+    """
+
+    INSTITUTION = "institution"
+    CHAIN_UGC = "chain_ugc"
+    CHAIN_PATHE = "chain_pathe"
+    CHAIN_MK2 = "chain_mk2"
+    CHAIN_OTHER = "chain_other"
+    INDEPENDENT = "independent"
 
 
 class ExtractedEvent(BaseModel):
@@ -106,7 +129,10 @@ class ExtractedEvent(BaseModel):
 
     Attributes:
         title: Film title as announced.
-        event_type: Category of the special screening.
+        event_type: Category of the special screening, or ``None`` for an
+            ordinary screening with no specific special category (a width
+            source reporting a ordinary showtime, or a screening not yet
+            classified by the specialness pipeline).
         venue: Cinema or venue hosting the screening.
         starts_at: Screening start time, timezone-aware UTC.
         has_team_present: Whether the film team attends (priority signal for
@@ -117,7 +143,7 @@ class ExtractedEvent(BaseModel):
     """
 
     title: str
-    event_type: EventType
+    event_type: EventType | None = None
     venue: str
     starts_at: datetime
     has_team_present: bool = False
@@ -144,6 +170,15 @@ class Sighting(BaseModel):
         source: Source the announcement was observed on.
         source_url: Direct link to the announcement, when available.
         booking_url: Direct link to buy tickets, when the source provides one.
+        venue_external_id: A stable venue identifier from the source itself
+            (e.g. Paris Ciné Info's theatre id), when the source provides
+            one. Provenance data, not part of ``ExtractedEvent`` since it is
+            never text the LLM extracts — used by
+            ``EventRepository._resolve_venue`` to recognize the same
+            physical venue across sources that describe it with different
+            wording (see ``Venue.paris_cine_info_tid``). ``None`` for every
+            source without such an id, which keeps their existing
+            name-based venue resolution unchanged.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -152,6 +187,7 @@ class Sighting(BaseModel):
     source: Source
     source_url: str | None = None
     booking_url: str | None = None
+    venue_external_id: str | None = None
 
 
 class Film(SQLModel, table=True):
@@ -203,15 +239,50 @@ class Venue(SQLModel, table=True):
         id: Surrogate primary key.
         slug: Normalized venue name, the natural key.
         name: Venue name as first announced (display form).
+        kind: Broad venue category, a prior signal for the specialness
+            classifier (see :class:`VenueKind`).
         address: Street address, once enriched.
         website: Official website URL, once enriched.
+        accepted_passes: Subscription card codes this venue accepts (e.g.
+            ``["ugc", "pass"]`` for UGC Illimité and Pathé CinéPass), once
+            enriched from Paris Ciné Info's venue-passes catalogue (see
+            ``io/scrapers/paris_cine_info.py::ParisCineInfoScraper.fetch_venue_passes``
+            and ``EventRepository.update_venue_passes``). ``None`` when never
+            enriched — not the same as "accepts no pass".
+        seat_count: Number of seats in the room, once enriched from Paris
+            Ciné Info's per-room detail endpoint (see
+            ``ParisCineInfoScraper.fetch_venue_details`` and
+            ``EventRepository.update_venue_details``). Left ``None`` for a
+            venue with more than one distinct room seen in a run — ambiguous
+            which room's seat count would apply to the shared venue row (see
+            ``docs/decisions/0011-retire-mk2-louxor.md`` on this codebase's
+            one-``Venue``-row-per-name granularity).
+        screen_width_m: Screen width in metres, same enrichment and same
+            multi-room caveat as ``seat_count``.
+        screen_height_m: Screen height in metres, same enrichment and same
+            multi-room caveat as ``seat_count``.
+        paris_cine_info_tid: Paris Ciné Info's own stable theatre identifier
+            for this venue, once observed (e.g. ``"C0140"``). A stronger
+            natural key than ``slug`` when available — see
+            ``EventRepository._resolve_venue`` and
+            ``docs/decisions/0012-retire-lechampo.md``'s follow-up on venue
+            -name fragmentation: two different sources' wording for the same
+            physical venue used to create two ``Venue`` rows; a stable
+            external id lets them be recognized (and merged) as one, the
+            same role ``Film.tmdb_id`` already plays for films.
     """
 
     id: int | None = Field(default=None, primary_key=True)
     slug: str = Field(unique=True, index=True)
     name: str
+    kind: VenueKind = Field(default=VenueKind.INDEPENDENT)
     address: str | None = None
     website: str | None = None
+    accepted_passes: list[str] | None = Field(default=None, sa_type=JSON)
+    seat_count: int | None = None
+    screen_width_m: float | None = None
+    screen_height_m: float | None = None
+    paris_cine_info_tid: str | None = Field(default=None, unique=True)
 
     screenings: list["ScreeningEvent"] = Relationship(back_populates="venue")
 
@@ -228,12 +299,30 @@ class ScreeningEvent(SQLModel, table=True):
         dedup_key: Unique key identifying the screening across sources.
         film_id: The screened film.
         venue_id: The hosting venue.
-        event_type: Category of the special screening.
+        event_type: Category of the special screening, or ``None`` when the
+            screening is ordinary or not yet classified.
+        is_special: Whether this screening is worth surfacing (digest-eligible).
+            Set ``True`` at ingestion for any screening a scraper already
+            committed to a specific :class:`EventType` for (every source
+            existing before the all-screenings expansion works this way — see
+            ``docs/decisions/0008-drop-allocine-width-source.md``), and
+            upgraded from ``False`` by the specialness classification
+            pipeline (``core/specialness/``) for ordinary-looking screenings
+            that turn out to be noteworthy (rarity, venue kind, film age...).
+        specialness_reasons: Which signal(s) produced the current
+            ``is_special`` verdict, for auditability — e.g.
+            ``["curated_source"]`` when a source's own curation already
+            implies specialness, or rule/LLM-derived reasons once classified.
+        specialness_confidence: Confidence of the specialness verdict, when
+            derived by a rule or the LLM classifier rather than being certain
+            by construction.
         starts_at: Screening start time, timezone-aware UTC.
         has_team_present: Whether the film team attends.
         description: Free-text details from the source, when provided.
         cycle_name: Retrospective/festival cycle, when announced.
-        booking_url: Ticket-purchase link, when provided.
+        booking_url: Best available link for this screening — a direct
+            ticket-purchase link when the source provides one, otherwise the
+            announcement page (see ``EventRepository.ingest``).
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -242,7 +331,10 @@ class ScreeningEvent(SQLModel, table=True):
     film_id: int = Field(foreign_key="film.id", index=True)
     venue_id: int = Field(foreign_key="venue.id", index=True)
 
-    event_type: EventType
+    event_type: EventType | None = None
+    is_special: bool = Field(default=False, index=True)
+    specialness_reasons: list[str] | None = Field(default=None, sa_type=JSON)
+    specialness_confidence: float | None = None
     starts_at: datetime = Field(sa_type=UtcDateTime)
     has_team_present: bool = False
     description: str | None = None

@@ -21,6 +21,13 @@ from cine_event_bot.core.evaluation import (
     parse_golden_cases,
 )
 from cine_event_bot.core.report import IngestionReport, build_admin_report
+from cine_event_bot.core.specialness_evaluation import (
+    evaluate_cases as evaluate_specialness_cases,
+)
+from cine_event_bot.core.specialness_evaluation import (
+    parse_golden_cases as parse_specialness_cases,
+)
+from cine_event_bot.core.stats import EventStats
 from cine_event_bot.io.bot import broadcast, build_dispatcher
 from cine_event_bot.io.console import (
     RichReporter,
@@ -28,15 +35,12 @@ from cine_event_bot.io.console import (
     print_banner,
     print_evaluation,
     print_ingestion_summary,
+    print_specialness_evaluation,
     print_stats,
 )
 from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor, build_interpreter
-from cine_event_bot.io.repository import (
-    EventRepository,
-    EventStats,
-    SubscriberRepository,
-)
+from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 from cine_event_bot.io.scrapers import build_scrapers
 from cine_event_bot.io.tmdb import build_tmdb_enricher
 from cine_event_bot.pipeline import IngestionPipeline
@@ -45,6 +49,7 @@ app = typer.Typer(help="cine-event-bot admin CLI")
 
 _HTTP_TIMEOUT_SECONDS = 30.0
 _DIGEST_WINDOW = timedelta(days=7)
+_RETENTION_WINDOW = timedelta(days=14)
 
 
 def get_greeting() -> str:
@@ -88,23 +93,29 @@ async def _run_ingestion() -> IngestionReport:
             ) as client,
             database.session() as session,
         ):
+            repository = EventRepository(session)
             enricher = build_tmdb_enricher(client, settings.tmdb_api_key)
-            pipeline = IngestionPipeline(scrapers, EventRepository(session), enricher)
+            pipeline = IngestionPipeline(scrapers, repository, enricher)
             with build_progress() as progress:
                 report = await pipeline.run(client, RichReporter(progress))
+            stats = await repository.stats()
     finally:
         await database.dispose()
-    await _notify_admin(settings, report)
+    await _notify_admin(settings, report, stats)
     return report
 
 
-async def _notify_admin(settings: Settings, report: IngestionReport) -> None:
+async def _notify_admin(
+    settings: Settings, report: IngestionReport, stats: EventStats
+) -> None:
     """Send the run's summary to the admin chat, when one is configured."""
     if settings.admin_chat_id is None:
         return
     bot = Bot(settings.telegram_bot_token)
     try:
-        await broadcast(bot, [settings.admin_chat_id], build_admin_report(report))
+        await broadcast(
+            bot, [settings.admin_chat_id], build_admin_report(report, stats)
+        )
     finally:
         await bot.session.close()
 
@@ -171,6 +182,25 @@ async def _run_evaluation(settings: Settings, dataset: Path) -> EvaluationSummar
     return await evaluate_cases(build_extractor(settings), cases)
 
 
+@app.command(name="eval-specialness")
+def eval_specialness(
+    dataset: Path = typer.Option(  # noqa: B008 — Typer reads options from defaults
+        Path("eval/golden_specialness.json"),
+        "--dataset",
+        "-d",
+        help="Golden dataset file.",
+    ),
+) -> None:
+    """Score the rule-based specialness classifier on the golden dataset.
+
+    Unlike ``eval-extraction``, this has no LLM or database to await — the
+    classifier and its golden cases are pure, in-memory data (see
+    ``core/specialness_evaluation.py``).
+    """
+    cases = parse_specialness_cases(dataset.read_text(encoding="utf-8"))
+    print_specialness_evaluation(evaluate_specialness_cases(cases))
+
+
 @app.command(name="backup-db")
 def backup_db(
     output_dir: Path = typer.Option(  # noqa: B008 — Typer reads options from defaults
@@ -195,6 +225,26 @@ async def _backup_db(output_dir: Path) -> Path:
     return target
 
 
+@app.command(name="prune-db")
+def prune_db() -> None:
+    """Delete ordinary screenings older than the retention window."""
+    deleted = asyncio.run(_prune_db())
+    typer.echo(f"Pruned {deleted} ordinary screening(s).")
+
+
+async def _prune_db() -> int:
+    """Delete ordinary screenings that started before the retention window."""
+    settings = Settings()
+    database = Database(settings.database_url)
+    await database.migrate_to_head()
+    older_than = datetime.now(UTC) - _RETENTION_WINDOW
+    try:
+        async with database.session() as session:
+            return await EventRepository(session).prune_ordinary_screenings(older_than)
+    finally:
+        await database.dispose()
+
+
 @app.command(name="weekly-digest")
 def weekly_digest() -> None:
     """Send the upcoming week's digest to every active subscriber."""
@@ -212,7 +262,7 @@ async def _run_weekly_digest() -> int:
     try:
         async with database.session() as session:
             events = await EventRepository(session).list_between(
-                now, now + _DIGEST_WINDOW
+                now, now + _DIGEST_WINDOW, only_special=True
             )
             subscribers = await SubscriberRepository(session).list_active()
         chat_ids = [subscriber.chat_id for subscriber in subscribers]

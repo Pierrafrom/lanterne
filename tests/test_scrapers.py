@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
 from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers import CinemathequeScraper, build_scrapers
-from cine_event_bot.io.scrapers.base import SourceScraper
+from cine_event_bot.io.scrapers.base import RawListing, SourceScraper, structure_via_llm
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -39,14 +39,30 @@ def _response(text: str) -> MagicMock:
     return response
 
 
-def test_registry_covers_every_source_when_fully_configured() -> None:
+# MK2, Le Louxor (ADR 0011), and Le Champo (ADR 0012) are retired but their
+# Source members stay, for the historical EventSighting rows already recorded
+# under them — the registry no longer builds a scraper for any of the three.
+_RETIRED_SOURCES = {Source.MK2, Source.LE_LOUXOR, Source.LE_CHAMPO}
+
+
+def test_registry_covers_every_active_source_when_fully_configured() -> None:
     scrapers = build_scrapers(
         _extractor_returning(_sample_extracted()),
         paris_cine_info_login="user@example.test",
         paris_cine_info_password="secret",
     )
 
-    assert {scraper.source for scraper in scrapers} == set(Source)
+    assert {scraper.source for scraper in scrapers} == set(Source) - _RETIRED_SOURCES
+
+
+def test_registry_does_not_build_a_retired_source() -> None:
+    scrapers = build_scrapers(
+        _extractor_returning(_sample_extracted()),
+        paris_cine_info_login="user@example.test",
+        paris_cine_info_password="secret",
+    )
+
+    assert not {scraper.source for scraper in scrapers} & _RETIRED_SOURCES
 
 
 def test_registry_skips_paris_cine_info_without_credentials() -> None:
@@ -131,6 +147,49 @@ async def test_fetch_events_skips_listings_whose_extraction_fails() -> None:
     events = await scraper.fetch_events(client, NullReporter())
 
     assert events == []
+
+
+async def test_structure_via_llm_known_starts_at_overrides_an_implausible_guess() -> (
+    None
+):
+    # The correction generalized from paris_cine_info.py's known-facts
+    # pattern into the one place every text-based scraper calls: a
+    # deterministically-resolved date must win over the LLM's own guess,
+    # even when that guess is implausible (in the past) — the exact failure
+    # mode confirmed live for the now-retired lechampo.py (ADR 0012).
+    stale_guess = ExtractedEvent(
+        title="Ciao, professore!",
+        event_type=EventType.RETROSPECTIVE,
+        venue="La Cinémathèque française",
+        starts_at=datetime.now(UTC) - timedelta(days=30),
+    )
+    listing = RawListing(
+        source=Source.CINEMATHEQUE,
+        source_url="https://example.test/seance/1",
+        raw_text="irrelevant",
+    )
+    known_starts_at = datetime.now(UTC) + timedelta(days=14)
+
+    sighting = await structure_via_llm(
+        _extractor_returning(stale_guess), listing, known_starts_at=known_starts_at
+    )
+
+    assert sighting is not None
+    assert sighting.extracted.starts_at == known_starts_at
+
+
+async def test_structure_via_llm_without_known_starts_at_keeps_prior_behavior() -> None:
+    extracted = _sample_extracted()
+    listing = RawListing(
+        source=Source.CINEMATHEQUE,
+        source_url="https://example.test/seance/1",
+        raw_text="irrelevant",
+    )
+
+    sighting = await structure_via_llm(_extractor_returning(extracted), listing)
+
+    assert sighting is not None
+    assert sighting.extracted.starts_at == extracted.starts_at
 
 
 async def test_fetch_events_drops_implausible_extractions() -> None:

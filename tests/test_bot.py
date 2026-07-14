@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
+from aiogram.enums import ParseMode
 from factories import make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -46,6 +47,17 @@ async def test_broadcast_sends_to_every_chat() -> None:
 
     assert sent == 3
     assert bot.send_message.await_count == 3
+
+
+async def test_broadcast_sends_as_html_with_link_previews_disabled() -> None:
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+
+    await broadcast(bot, [1], "digest")
+
+    _, kwargs = bot.send_message.await_args
+    assert kwargs["parse_mode"] == ParseMode.HTML
+    assert kwargs["link_preview_options"].is_disabled is True
 
 
 async def test_broadcast_skips_failed_sends() -> None:

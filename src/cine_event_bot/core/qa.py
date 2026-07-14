@@ -4,15 +4,23 @@ A question is turned by the LLM into a :class:`QueryCriteria` (the structured
 filter), the repository runs it, and :func:`format_qa_answer` renders the
 matches. This module holds the pure pieces — the criteria model and the French
 answer formatting; the LLM interpretation lives in ``io/llm.py`` and the query
-in the repository.
+in the repository. The answer is sent with Telegram's HTML parse mode (see
+``io/bot.py``), so every dynamic value is HTML-escaped and each line gets a
+clickable "Réserver" link when a booking URL is known.
 """
 
+import html
 from collections.abc import Sequence
 from datetime import datetime
 
 from pydantic import BaseModel
 
-from cine_event_bot.core.frenchfmt import event_type_label, french_date, french_time
+from cine_event_bot.core.frenchfmt import (
+    booking_link_html,
+    event_type_label,
+    french_date,
+    french_time,
+)
 from cine_event_bot.core.models import EventType, ScreeningEvent
 
 _NO_MATCH = "Je n'ai trouvé aucune séance correspondante."
@@ -58,7 +66,7 @@ def format_qa_answer(events: Sequence[ScreeningEvent]) -> str:
 
 
 def _answer_line(event: ScreeningEvent) -> str:
-    """Format one matching screening as an answer bullet line.
+    """Format one matching screening as an HTML answer bullet line.
 
     Expects the event's ``film`` and ``venue`` relationships to be loaded
     (repository queries eager-load them).
@@ -69,4 +77,7 @@ def _answer_line(event: ScreeningEvent) -> str:
     label = event_type_label(event.event_type)
     suffix = " ⭐ en présence de l'équipe" if event.has_team_present else ""
     when = f"{french_date(event.starts_at)} à {french_time(event.starts_at)}"
-    return f"• {when} — {title} · {event.venue.name} · {label}{suffix}"
+    return (
+        f"• {when} — {html.escape(title)} · {html.escape(event.venue.name)} · "
+        f"{html.escape(label)}{suffix}{booking_link_html(event.booking_url)}"
+    )

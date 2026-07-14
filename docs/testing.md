@@ -26,25 +26,28 @@ which are validated manually rather than unit-tested.
   - the **LLM** (Instructor) and the **Telegram bot** are mocked.
 - **Scraper parsing** is tested against committed, trimmed real-markup fixtures
   in `tests/fixtures/` (one or more per source, e.g. `cinematheque_*.html`,
-  `lechampo_cineclubs.html`, `mk2_evenements.html` — each trimmed from a real
-  fetch of the live site, not hand-invented markup). A site redesign breaks
-  the parse test — the intended early-warning signal (see
-  [scraping-strategy.md](scraping-strategy.md)).
+  `forumdesimages_*.html` — each trimmed from a real fetch of the live site,
+  not hand-invented markup). A site redesign breaks the parse test — the
+  intended early-warning signal (see [scraping-strategy.md](scraping-strategy.md)).
+  Retired sources (MK2, Le Louxor, Le Champo — see
+  [ADR 0011](decisions/0011-retire-mk2-louxor.md) and
+  [ADR 0012](decisions/0012-retire-lechampo.md)) had their fixtures and tests
+  deleted along with the scraper.
 - **One behaviour per test**, named `test_<behaviour>_<condition>`.
 
 ## What is tested where
 
-| Area                               | Tests                                                                                                                                                                                                 |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                                                                                                                                                     |
-| Persistence, dedup ingest, search  | `test_db.py`, `test_repository.py`, `test_ingest.py`                                                                                                                                                  |
-| Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py`, `test_lechampo.py`, `test_louxor.py`, `test_fondationpathe.py`, `test_lavillette.py`, `test_mk2.py`, `test_paris_cine_info.py` |
-| LLM extractor & guards & eval      | `test_llm.py`, `test_validation.py`, `test_evaluation.py`                                                                                                                                             |
-| TMDB enrichment                    | `test_tmdb.py`                                                                                                                                                                                        |
-| Ingestion pipeline                 | `test_pipeline.py`                                                                                                                                                                                    |
-| Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                                                                                                                                                        |
-| Bot handlers & broadcast           | `test_bot.py`                                                                                                                                                                                         |
-| CLI & JSONL logging                | `test_main.py`                                                                                                                                                                                        |
+| Area                               | Tests                                                                                                                                                            |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain models, dedup key           | `test_models.py`, `test_dedup.py`                                                                                                                                |
+| Persistence, dedup ingest, search  | `test_db.py`, `test_repository.py`, `test_ingest.py`                                                                                                             |
+| Scrapers (parsing + orchestration) | `test_scrapers.py`, `test_premiereprojo.py`, `test_forumdesimages.py`, `test_fondationpathe.py`, `test_lavillette.py`, `test_offi.py`, `test_paris_cine_info.py` |
+| LLM extractor & guards & eval      | `test_llm.py`, `test_validation.py`, `test_evaluation.py`                                                                                                        |
+| TMDB enrichment                    | `test_tmdb.py`                                                                                                                                                   |
+| Ingestion pipeline                 | `test_pipeline.py`                                                                                                                                               |
+| Digest & Q&A formatting/search     | `test_digest.py`, `test_qa.py`                                                                                                                                   |
+| Bot handlers & broadcast           | `test_bot.py`                                                                                                                                                    |
+| CLI & JSONL logging                | `test_main.py`                                                                                                                                                   |
 
 ## Quality gates (run before every commit)
 
@@ -76,3 +79,26 @@ To grow the dataset, append a case to the JSON file: give it a short unique
 `id`, put in `raw_text` exactly what a scraper would hand the LLM (including a
 `Reference date:` line when the announcement omits the year), and fill
 `expected` with the correct extraction (times in UTC).
+
+## Evaluating the specialness classifier (offline, no I/O)
+
+The rule-based specialness classifier (`core/specialness.py`, see
+[ADR 0009](decisions/0009-specialness-rules-only.md)) has its own golden
+-dataset harness — unlike the extraction one, it needs no LLM or database,
+since the classifier and its inputs are pure, in-memory data:
+
+```fish
+uv run cine-event-bot eval-specialness
+```
+
+It runs the classifier over `eval/golden_specialness.json` (labeled
+screenings: venue kind, team presence, cycle name, release year, and the two
+aggregate counts `distinct_venue_count`/`weekly_showing_count`) and reports
+accuracy, precision, and recall against each case's `expected_special` label.
+
+The seeded dataset is a handful of hand-built illustrative cases, one per
+rule plus two negatives — not yet validated against a real scrape's actual
+distribution of ordinary-vs-noteworthy screenings (see `coverage-matrix.md`'s
+"Specialness classifier tuning" open item). To grow it with real examples:
+run `scrape`, review a sample of stored screenings, and append a case per
+`GoldenCase`'s fields, with `notes` explaining the label's rationale.

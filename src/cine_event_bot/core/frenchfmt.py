@@ -3,14 +3,24 @@
 Shared by the weekly digest and the Q&A answers. Events are stored in UTC and
 shown in Paris local time, with French weekday and month names (Python's
 locale-based ``strftime`` is unreliable, so the names are tabled explicitly).
+Messages are sent with Telegram's HTML parse mode (see ``io/bot.py``), so
+:func:`booking_link_html` is also shared here for the clickable "Réserver"
+link appended to a screening line.
+
+:data:`MONTHS_FR` is the output-direction (index → name) table; the parsing
+counterpart (name → index, for resolving a year-less scraped date) is
+``core/frenchdate.py``, which imports it from here to keep one source of
+truth for French month names.
 """
 
+import html
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from cine_event_bot.core.models import EventType
 
 _PARIS = ZoneInfo("Europe/Paris")
+_BOOKING_LABEL = "Réserver"
 
 _EVENT_TYPE_LABELS: dict[EventType, str] = {
     EventType.AVANT_PREMIERE: "Avant-première",
@@ -24,16 +34,40 @@ _EVENT_TYPE_LABELS: dict[EventType, str] = {
 }
 
 
-def event_type_label(event_type: EventType) -> str:
+_ORDINARY_SCREENING_LABEL = "Séance"
+
+
+def event_type_label(event_type: EventType | None) -> str:
     """Return the French display label of a screening category.
 
     Args:
-        event_type: The category to label.
+        event_type: The category to label, or ``None`` for an ordinary
+            screening with no specific category.
 
     Returns:
         The label shown to users in the digest and Q&A answers.
     """
+    if event_type is None:
+        return _ORDINARY_SCREENING_LABEL
     return _EVENT_TYPE_LABELS[event_type]
+
+
+def booking_link_html(booking_url: str | None) -> str:
+    """Return a clickable "Réserver" HTML link suffix for a screening line.
+
+    Args:
+        booking_url: The screening's best available link (see
+            ``EventRepository.ingest``), or ``None`` when no source ever
+            reported one.
+
+    Returns:
+        A `` · <a href="...">Réserver</a>`` suffix ready to append to an
+        HTML-parse-mode Telegram message line, or an empty string when there
+        is no link to offer.
+    """
+    if booking_url is None:
+        return ""
+    return f' · <a href="{html.escape(booking_url, quote=True)}">{_BOOKING_LABEL}</a>'
 
 
 def _to_paris(moment: datetime) -> datetime:
@@ -56,7 +90,7 @@ _WEEKDAYS = (
     "samedi",
     "dimanche",
 )
-_MONTHS = (
+MONTHS_FR = (
     "janvier",
     "février",
     "mars",
@@ -82,7 +116,7 @@ def french_date(moment: datetime) -> str:
         The weekday, day, and month in French (no year).
     """
     local = _to_paris(moment)
-    return f"{_WEEKDAYS[local.weekday()]} {local.day} {_MONTHS[local.month - 1]}"
+    return f"{_WEEKDAYS[local.weekday()]} {local.day} {MONTHS_FR[local.month - 1]}"
 
 
 def french_time(moment: datetime) -> str:
