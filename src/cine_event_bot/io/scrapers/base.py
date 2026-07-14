@@ -57,7 +57,10 @@ class RawListing:
 
 
 async def structure_via_llm(
-    extractor: EventExtractor, listing: RawListing
+    extractor: EventExtractor,
+    listing: RawListing,
+    *,
+    known_starts_at: datetime | None = None,
 ) -> Sighting | None:
     """Structure one raw listing into a sighting via the LLM.
 
@@ -69,6 +72,17 @@ async def structure_via_llm(
     Args:
         extractor: LLM-backed extractor turning listing text into events.
         listing: The raw listing to structure.
+        known_starts_at: When the caller already resolved the screening's
+            start time deterministically (e.g.
+            ``core/frenchdate.py::resolve_next_occurrence`` for a year-less
+            date), it replaces the LLM's own ``starts_at`` guess *before*
+            plausibility validation runs — asking the LLM to resolve a
+            year-less date itself is unreliable (confirmed live for the
+            now-retired ``lechampo.py``, see
+            ``docs/decisions/0012-retire-lechampo.md``), so a known-true
+            value should never be second-guessed by validating the LLM's
+            own guess instead. ``None`` (the default) leaves every other
+            scraper's behavior unchanged.
 
     Returns:
         The structured :class:`Sighting`, or None when extraction failed or
@@ -82,6 +96,8 @@ async def structure_via_llm(
             extra={"ctx": {"source": listing.source.value, "url": listing.source_url}},
         )
         return None
+    if known_starts_at is not None:
+        extracted = extracted.model_copy(update={"starts_at": known_starts_at})
     issues = find_extraction_issues(extracted, now=datetime.now(UTC))
     if issues:
         logger.warning(
