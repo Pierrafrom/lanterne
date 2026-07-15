@@ -19,12 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FilmRepository` and `VenueRepository`, each owning one concern. Public
   API unchanged — every caller still constructs a single
   `EventRepository(session)`. No behavior change.
+- Split `io/scrapers/paris_cine_info.py`'s stateless parsing helpers (film
+  ratings, venue passes, venue detail, small coercion helpers) into a new
+  `paris_cine_info_parsing.py` — the remainder (scraper class plus its
+  tightly-coupled showtime/LLM-classification flow) is one cohesive unit
+  left as-is. No behavior change.
 
 ### Added
 
 - Async ingestion pipeline: scrape → structure → TMDB-enrich → deduplicate →
   persist (SQLite via aiosqlite), idempotent across re-runs.
-- Nine source scrapers behind a `SourceScraper` protocol:
+- Nine source scrapers behind a `SourceScraper` protocol (MK2, Le Louxor,
+  and Le Champo were later retired in favor of confirmed Paris Ciné Info
+  coverage — see [ADR 0011](docs/decisions/0011-retire-mk2-louxor.md) and
+  [ADR 0012](docs/decisions/0012-retire-lechampo.md); seven sources remain
+  active):
   - No LLM (structured JSON): Première Projo and MK2 (both embedded Next.js
     RSC JSON).
   - HTML + LLM extraction (Instructor/Ollama): La Cinémathèque française,

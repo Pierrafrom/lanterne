@@ -171,9 +171,14 @@ as a primary discovery source.
   booking link, no LLM), but each showtime's free-text `com` field, when
   present, still needs the LLM to classify `event_type`/`cycle_name`/
   `has_team_present`; a showtime with no comment is stored directly as an
-  ordinary screening rather than guessed at or dropped. See
-  [`paris_cine_info.py`](../src/lanterne/io/scrapers/paris_cine_info.py),
-  [ADR 0007](decisions/0007-paris-cine-info.md), and
+  ordinary screening rather than guessed at or dropped. The scraper class
+  itself lives in
+  [`paris_cine_info.py`](../src/lanterne/io/scrapers/paris_cine_info.py);
+  its stateless parsing helpers (film ratings, venue passes, venue detail,
+  small coercion helpers) are extracted into
+  [`paris_cine_info_parsing.py`](../src/lanterne/io/scrapers/paris_cine_info_parsing.py)
+  since they don't touch scraper state. See also
+  [ADR 0007](decisions/0007-paris-cine-info.md) and
   [ADR 0008](decisions/0008-drop-allocine-width-source.md).
 - **Level 4 — Le Champo (retired, see [ADR 0012](decisions/0012-retire-lechampo.md)).**
   A single hand-authored CMS article, not a feed of cards: each cycle's block
