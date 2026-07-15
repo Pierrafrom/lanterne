@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI entry point, database file, GitHub repository) ahead of upcoming
   public-facing surfaces (a public website, a public API, and X/Instagram
   auto-posting). No behavior change.
+- Split `io/repository.py`'s 674-line `EventRepository` (ingestion/dedup,
+  film management, venue management, and querying all mixed in one class)
+  into a `io/repository/` package: `EventRepository` now composes a new
+  `FilmRepository` and `VenueRepository`, each owning one concern. Public
+  API unchanged — every caller still constructs a single
+  `EventRepository(session)`. No behavior change.
 
 ### Added
 

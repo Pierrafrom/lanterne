@@ -51,7 +51,7 @@ flowchart TD
         scrapers["scrapers<br/>(Cinémathèque, Première Projo, Forum,<br/>Fondation Pathé, La Villette,<br/>Paris Ciné Info, offi.fr)"]
         llm["llm<br/>(EventExtractor, QuestionInterpreter)"]
         tmdb["tmdb<br/>(TmdbEnricher)"]
-        repo["repository<br/>(Event, Subscriber)"]
+        repo["repository<br/>(Event, Film, Venue, Subscriber)"]
         db[("SQLite<br/>aiosqlite")]
         bot["bot<br/>(handlers, broadcast)"]
     end
@@ -87,6 +87,16 @@ row per venue, keyed by its normalized name, carrying a `VenueKind` used as a
 specialness prior), and `ScreeningEvent` referencing both. Scrapers do not
 build rows directly — they produce `Sighting` objects (extracted facts +
 provenance) that `EventRepository.ingest` resolves into rows.
+
+`io/repository/` is a package, not a single module: `EventRepository`
+(ingestion, dedup, event querying/reporting) composes a `FilmRepository` and
+a `VenueRepository` (film- and venue-specific resolution, merging, and
+enrichment, each its own file) to resolve the film/venue rows an incoming
+sighting needs. `EventRepository` re-exposes their methods as thin delegates,
+so every caller still only ever constructs a single
+`EventRepository(session)` — the split is purely internal, fixing an earlier
+SRP violation (one 674-line class mixing all four concerns) without changing
+the public API.
 
 `ScreeningEvent.event_type` is nullable (`None` for an ordinary screening);
 `is_special` starts `True` at ingestion whenever a sighting already carries a
