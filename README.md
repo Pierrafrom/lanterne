@@ -1,4 +1,4 @@
-# cine-event-bot
+# Lanterne
 
 Self-hosted Telegram bot that tracks cinema screenings in Paris/IDF, flags
 **special screenings** — avant-premières (with the film team), ciné-concerts,
@@ -41,17 +41,17 @@ data, sends a **weekly digest** of the specials, and answers
 ## Quickstart
 
 ```fish
-git clone https://github.com/Pierrafrom/cine-event-bot
-cd cine-event-bot
+git clone https://github.com/Pierrafrom/lanterne
+cd lanterne
 uv sync --all-groups
 cp .env.example .env   # fill TELEGRAM_BOT_TOKEN, TMDB_API_KEY, OLLAMA_BASE_URL, OLLAMA_MODEL
 
-uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
-uv run cine-event-bot stats           # summary of stored events
-uv run cine-event-bot weekly-digest   # broadcast the week's digest
-uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
-uv run cine-event-bot prune-db        # delete ordinary screenings older than 14 days
-uv run cine-event-bot run-bot         # start the Telegram bot
+uv run lanterne scrape          # scrape + enrich + persist (idempotent)
+uv run lanterne stats           # summary of stored events
+uv run lanterne weekly-digest   # broadcast the week's digest
+uv run lanterne backup-db       # timestamped snapshot into ./backups/
+uv run lanterne prune-db        # delete ordinary screenings older than 14 days
+uv run lanterne run-bot         # start the Telegram bot
 ```
 
 Full instructions (prerequisites, Ollama model, Docker, observability) in

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the project from `cine-event-bot` to **Lanterne** (Python package,
+  CLI entry point, database file, GitHub repository) ahead of upcoming
+  public-facing surfaces (a public website, a public API, and X/Instagram
+  auto-posting). No behavior change.
+
 ### Added
 
 - Async ingestion pipeline: scrape → structure → TMDB-enrich → deduplicate →

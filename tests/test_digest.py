@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 from factories import make_display_event
 
-from cine_event_bot.core.digest import build_digest
-from cine_event_bot.core.frenchfmt import event_type_label
-from cine_event_bot.core.models import EventType
+from lanterne.core.digest import build_digest
+from lanterne.core.frenchfmt import event_type_label
+from lanterne.core.models import EventType
 
 
 def test_build_digest_without_events_is_explicit() -> None:

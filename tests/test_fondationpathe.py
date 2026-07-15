@@ -4,9 +4,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
-from cine_event_bot.core.progress import NullReporter
-from cine_event_bot.io.scrapers.fondationpathe import FondationPatheScraper
+from lanterne.core.models import EventType, ExtractedEvent, Sighting, Source
+from lanterne.core.progress import NullReporter
+from lanterne.io.scrapers.fondationpathe import FondationPatheScraper
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 

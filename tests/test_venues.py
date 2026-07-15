@@ -1,7 +1,7 @@
 """Tests for venue-kind classification and subscription-pass labels."""
 
-from cine_event_bot.core.models import VenueKind
-from cine_event_bot.core.venues import classify_venue_kind, pass_label
+from lanterne.core.models import VenueKind
+from lanterne.core.venues import classify_venue_kind, pass_label
 
 
 def test_classifies_ugc_by_prefix() -> None:

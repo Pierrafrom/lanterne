@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to cine-event-bot. This guide covers the local workflow;
+Thanks for contributing to Lanterne. This guide covers the local workflow;
 see [docs/setup.md](docs/setup.md) for full install/configuration and
 [docs/testing.md](docs/testing.md) for the testing approach.
 

@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 import sqlmodel
 
-import cine_event_bot.core.models
+import lanterne.core.models
 from alembic import op
 ${imports if imports else ""}
 

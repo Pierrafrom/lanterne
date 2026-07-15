@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 
-from cine_event_bot.core.models import Source
-from cine_event_bot.core.progress import NullReporter
-from cine_event_bot.io.scrapers.offi import (
+from lanterne.core.models import Source
+from lanterne.core.progress import NullReporter
+from lanterne.io.scrapers.offi import (
     OffiScraper,
     _max_page,
     _parse_venue_urls,

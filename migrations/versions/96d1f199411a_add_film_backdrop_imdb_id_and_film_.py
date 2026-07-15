@@ -22,7 +22,7 @@ import sqlalchemy as sa
 import sqlmodel
 from alembic import op
 
-import cine_event_bot.core.models
+import lanterne.core.models
 
 # revision identifiers, used by Alembic.
 revision: str = "96d1f199411a"
@@ -55,7 +55,7 @@ def upgrade() -> None:
         sa.Column("url", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
             "fetched_at",
-            cine_event_bot.core.models.UtcDateTime(timezone=True),
+            lanterne.core.models.UtcDateTime(timezone=True),
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["film_id"], ["film.id"]),

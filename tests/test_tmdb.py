@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from cine_event_bot.core.models import Film
-from cine_event_bot.io.tmdb import TmdbClient, TmdbEnricher
+from lanterne.core.models import Film
+from lanterne.io.tmdb import TmdbClient, TmdbEnricher
 
 
 def _search_payload(**overrides: Any) -> dict[str, Any]:

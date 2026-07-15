@@ -8,22 +8,22 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-import cine_event_bot.main as main_module
-from cine_event_bot.config import Settings
-from cine_event_bot.core.models import Film, RatingSource
-from cine_event_bot.core.report import IngestionReport, SourceOutcome
-from cine_event_bot.core.stats import EventStats
-from cine_event_bot.io.repository import EventRepository
-from cine_event_bot.io.scrapers.base import RatingRecord
-from cine_event_bot.io.scrapers.paris_cine_info import ParisCineInfoScraper
-from cine_event_bot.io.tmdb import MovieMatch
-from cine_event_bot.logging_config import JsonlFormatter, get_logger
-from cine_event_bot.main import app, get_greeting
+import lanterne.main as main_module
+from lanterne.config import Settings
+from lanterne.core.models import Film, RatingSource
+from lanterne.core.report import IngestionReport, SourceOutcome
+from lanterne.core.stats import EventStats
+from lanterne.io.repository import EventRepository
+from lanterne.io.scrapers.base import RatingRecord
+from lanterne.io.scrapers.paris_cine_info import ParisCineInfoScraper
+from lanterne.io.tmdb import MovieMatch
+from lanterne.logging_config import JsonlFormatter, get_logger
+from lanterne.main import app, get_greeting
 
 
 def test_get_greeting_contains_bot_name() -> None:
     result = get_greeting()
-    assert "cine-event-bot" in result
+    assert "Lanterne" in result
 
 
 def test_get_greeting_returns_non_empty_str() -> None:
@@ -34,7 +34,7 @@ def test_greet_command_outputs_greeting() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["greet"])
     assert result.exit_code == 0
-    assert "cine-event-bot" in result.output
+    assert "Lanterne" in result.output
 
 
 def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -46,7 +46,7 @@ def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         )
 
-    monkeypatch.setattr("cine_event_bot.main._run_ingestion", fake_run)
+    monkeypatch.setattr("lanterne.main._run_ingestion", fake_run)
     result = CliRunner().invoke(app, ["scrape"])
 
     assert result.exit_code == 0
@@ -58,7 +58,7 @@ def test_stats_command_prints_total(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_stats() -> EventStats:
         return EventStats(total=169, by_source={"premiereprojo.fr": 169})
 
-    monkeypatch.setattr("cine_event_bot.main._load_stats", fake_stats)
+    monkeypatch.setattr("lanterne.main._load_stats", fake_stats)
     result = CliRunner().invoke(app, ["stats"])
 
     assert result.exit_code == 0
@@ -77,7 +77,7 @@ def test_prune_db_command_reports_count(monkeypatch: pytest.MonkeyPatch) -> None
     async def fake_prune() -> int:
         return 42
 
-    monkeypatch.setattr("cine_event_bot.main._prune_db", fake_prune)
+    monkeypatch.setattr("lanterne.main._prune_db", fake_prune)
     result = CliRunner().invoke(app, ["prune-db"])
 
     assert result.exit_code == 0
@@ -90,7 +90,7 @@ def test_backfill_ratings_command_reports_count(
     async def fake_backfill() -> int:
         return 7
 
-    monkeypatch.setattr("cine_event_bot.main._run_backfill_ratings", fake_backfill)
+    monkeypatch.setattr("lanterne.main._run_backfill_ratings", fake_backfill)
     result = CliRunner().invoke(app, ["backfill-ratings"])
 
     assert result.exit_code == 0
@@ -212,7 +212,7 @@ def test_reset_db_command_runs_with_yes(monkeypatch: pytest.MonkeyPatch) -> None
         nonlocal called
         called = True
 
-    monkeypatch.setattr("cine_event_bot.main._reset_db", fake_reset)
+    monkeypatch.setattr("lanterne.main._reset_db", fake_reset)
     result = CliRunner().invoke(app, ["reset-db", "--yes"])
 
     assert result.exit_code == 0
@@ -226,7 +226,7 @@ def test_reset_db_command_aborts_without_confirmation(
     async def fail_reset() -> None:
         raise AssertionError("reset must not run when declined")
 
-    monkeypatch.setattr("cine_event_bot.main._reset_db", fail_reset)
+    monkeypatch.setattr("lanterne.main._reset_db", fail_reset)
     result = CliRunner().invoke(app, ["reset-db"], input="n\n")
 
     assert "Aborted" in result.output

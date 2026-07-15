@@ -1,4 +1,4 @@
-# cine-event-bot — project context for AI assistants
+# Lanterne — project context for AI assistants
 
 > Global rules (clean code, TDD, typing, uv, logging, git workflow) are in
 > `~/.claude/CLAUDE.md` — this file only adds what is specific to this project.
@@ -57,7 +57,7 @@ Weekly cron (Typer CLI, asyncio.run())
 ## Package structure
 
 ```
-src/cine_event_bot/
+src/lanterne/
 ├── main.py              # Typer admin CLI (sync entry point, wraps asyncio.run)
 ├── logging_config.py    # JSONL logger — call get_logger(__name__) everywhere
 ├── core/                # business logic (models, digest, dedup)
@@ -98,13 +98,13 @@ uv sync --all-groups
 cp .env.example .env   # fill in the required tokens
 uv run pytest          # run tests
 
-# Admin CLI (Typer) via the `cine-event-bot` entry point — see `--help`
-uv run cine-event-bot scrape          # scrape + enrich + persist (idempotent)
-uv run cine-event-bot stats           # summary of stored events
-uv run cine-event-bot weekly-digest   # broadcast the week's digest
-uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
-uv run cine-event-bot prune-db        # delete ordinary screenings older than 14 days
-uv run cine-event-bot backfill-ratings # one-off: backdrop/imdb id/ratings for pre-existing films
-uv run cine-event-bot run-bot         # start the Telegram bot
-uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
+# Admin CLI (Typer) via the `lanterne` entry point — see `--help`
+uv run lanterne scrape          # scrape + enrich + persist (idempotent)
+uv run lanterne stats           # summary of stored events
+uv run lanterne weekly-digest   # broadcast the week's digest
+uv run lanterne backup-db       # timestamped snapshot into ./backups/
+uv run lanterne prune-db        # delete ordinary screenings older than 14 days
+uv run lanterne backfill-ratings # one-off: backdrop/imdb id/ratings for pre-existing films
+uv run lanterne run-bot         # start the Telegram bot
+uv run lanterne reset-db --yes  # drop + recreate all tables (wipes data)
 ```

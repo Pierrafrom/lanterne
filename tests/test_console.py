@@ -1,8 +1,8 @@
 """Tests for the Rich progress reporter and console helpers."""
 
-from cine_event_bot.core.report import IngestionReport, SourceOutcome
-from cine_event_bot.core.stats import EventStats
-from cine_event_bot.io.console import (
+from lanterne.core.report import IngestionReport, SourceOutcome
+from lanterne.core.stats import EventStats
+from lanterne.io.console import (
     RichReporter,
     build_progress,
     print_banner,

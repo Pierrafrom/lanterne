@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from cine_event_bot.core.models import (
+from lanterne.core.models import (
     EventType,
     ExtractedEvent,
     Film,

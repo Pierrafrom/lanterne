@@ -31,9 +31,9 @@ from dataclasses import dataclass
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
-from cine_event_bot.config import Settings
-from cine_event_bot.core.models import EventSighting, ScreeningEvent, Source
-from cine_event_bot.io.db import Database
+from lanterne.config import Settings
+from lanterne.core.models import EventSighting, ScreeningEvent, Source
+from lanterne.io.db import Database
 
 _RETIREMENT_CANDIDATES = (Source.MK2, Source.LE_CHAMPO, Source.LE_LOUXOR)
 

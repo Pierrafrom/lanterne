@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from cine_event_bot.config import Settings
+from lanterne.config import Settings
 
 _REQUIRED_ENV_VARS = (
     "TELEGRAM_BOT_TOKEN",

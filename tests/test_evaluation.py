@@ -6,13 +6,13 @@ from datetime import UTC, datetime
 import pytest
 from factories import make_extracted
 
-from cine_event_bot.core.evaluation import (
+from lanterne.core.evaluation import (
     GoldenCase,
     compare_extraction,
     evaluate_cases,
     parse_golden_cases,
 )
-from cine_event_bot.core.models import ExtractedEvent
+from lanterne.core.models import ExtractedEvent
 
 _GOLDEN_JSON = json.dumps(
     {

@@ -1,4 +1,4 @@
-# Copilot Instructions — cine-event-bot
+# Copilot Instructions — Lanterne
 
 ## Project summary
 
@@ -42,7 +42,7 @@ no sync SQLAlchemy sessions, no `time.sleep()` in async context. Use `asyncio.sl
 ## Package layout
 
 ```
-src/cine_event_bot/
+src/lanterne/
 ├── main.py              # Typer admin CLI — sync entry point, calls asyncio.run()
 ├── logging_config.py    # JSONL structured logger — import get_logger(__name__) everywhere
 ├── core/                # pure business logic: domain models, digest builder, dedup
@@ -51,7 +51,7 @@ src/cine_event_bot/
 
 - `core/` must not import from `io/` — business logic has no knowledge of transport.
 - `io/` calls into `core/` for business rules, never the reverse.
-- All imports are **absolute** (`from cine_event_bot.core.models import Event`), never
+- All imports are **absolute** (`from lanterne.core.models import Event`), never
   relative (`from ..core.models import Event`) — enforced by ruff TID rule.
 
 ## Code conventions
@@ -60,7 +60,7 @@ src/cine_event_bot/
 
 ```python
 # Preferred — structured, filterable with grep/jq
-from cine_event_bot.logging_config import get_logger
+from lanterne.logging_config import get_logger
 
 logger = get_logger(__name__)
 logger.error("scraping failed", extra={"ctx": {"source": "mk2.fr", "status": 404}})
@@ -119,7 +119,7 @@ response = httpx.get(url)
 
 ```python
 # Preferred
-from cine_event_bot.core.config import settings
+from lanterne.core.config import settings
 token = settings.telegram_bot_token
 
 # Avoid — bypasses validation, easy to miss a missing variable

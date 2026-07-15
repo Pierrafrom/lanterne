@@ -8,12 +8,12 @@ import httpx
 import pytest
 from factories import make_sighting
 
-from cine_event_bot.core.dedup import compute_dedup_key
-from cine_event_bot.core.models import EventType, Film, RatingSource, Sighting, Source
-from cine_event_bot.core.progress import ProgressReporter
-from cine_event_bot.io.repository import EventRepository
-from cine_event_bot.io.scrapers.base import RatingRecord, VenueDetail
-from cine_event_bot.pipeline import IngestionPipeline
+from lanterne.core.dedup import compute_dedup_key
+from lanterne.core.models import EventType, Film, RatingSource, Sighting, Source
+from lanterne.core.progress import ProgressReporter
+from lanterne.io.repository import EventRepository
+from lanterne.io.scrapers.base import RatingRecord, VenueDetail
+from lanterne.pipeline import IngestionPipeline
 
 _MOMENT = datetime(2026, 6, 25, 18, 30, tzinfo=UTC)
 _VENUE = "La Cinémathèque française"
@@ -754,7 +754,7 @@ async def test_run_logs_a_specialness_verdict_for_a_fired_rule(
     ]
     pipeline = IngestionPipeline(scrapers, repository, _RepertoryEnricher())
 
-    with caplog.at_level(logging.INFO, logger="cine_event_bot.pipeline"):
+    with caplog.at_level(logging.INFO, logger="lanterne.pipeline"):
         await pipeline.run(MagicMock())
 
     verdicts = [r for r in caplog.records if r.message == "specialness verdict"]
@@ -777,7 +777,7 @@ async def test_run_logs_a_specialness_verdict_when_no_rule_fires(
     scrapers = [_FakeScraper(Source.OFFI, sightings)]
     pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
 
-    with caplog.at_level(logging.INFO, logger="cine_event_bot.pipeline"):
+    with caplog.at_level(logging.INFO, logger="lanterne.pipeline"):
         await pipeline.run(MagicMock())
 
     verdicts = [r for r in caplog.records if r.message == "specialness verdict"]

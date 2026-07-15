@@ -4,9 +4,9 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
-from cine_event_bot.core.progress import NullReporter
-from cine_event_bot.io.scrapers.lavillette import (
+from lanterne.core.models import EventType, ExtractedEvent, Sighting, Source
+from lanterne.core.progress import NullReporter
+from lanterne.io.scrapers.lavillette import (
     LaVilletteScraper,
     _resolve_known_starts_at,
 )

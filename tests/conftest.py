@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 import pytest_asyncio
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.io.db import Database
+from lanterne.io.db import Database
 
 
 @pytest_asyncio.fixture

@@ -1,11 +1,11 @@
 """Tests for the ingestion report and its French admin summary."""
 
-from cine_event_bot.core.report import (
+from lanterne.core.report import (
     IngestionReport,
     SourceOutcome,
     build_admin_report,
 )
-from cine_event_bot.core.stats import EventStats
+from lanterne.core.stats import EventStats
 
 
 def _report() -> IngestionReport:

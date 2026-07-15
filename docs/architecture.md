@@ -1,6 +1,6 @@
 # Architecture
 
-cine-event-bot aggregates cinema screenings in Paris/IDF from several scraped
+Lanterne aggregates cinema screenings in Paris/IDF from several scraped
 sources, enriches them with TMDB metadata, persists a deduplicated set, and
 exposes them through a Telegram bot (a weekly digest plus natural-language Q&A).
 
@@ -8,7 +8,7 @@ Every screening is stored, not only special ones — see
 [ADR 0008](decisions/0008-drop-allocine-width-source.md) and
 [`coverage-matrix.md`](coverage-matrix.md) for the sourcing strategy behind
 this. `is_special` (upgraded by the rule-based specialness classifier,
-[`core/specialness.py`](../src/cine_event_bot/core/specialness.py) — see
+[`core/specialness.py`](../src/lanterne/core/specialness.py) — see
 [ADR 0009](decisions/0009-specialness-rules-only.md) for why it is rules
 only, no LLM) separates "worth surfacing" from `event_type`, which now only
 names *which* special category a screening belongs to and is `None` for an

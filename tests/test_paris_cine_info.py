@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cine_event_bot.core.models import (
+from lanterne.core.models import (
     EventType,
     ExtractedEvent,
     RatingSource,
     Sighting,
     Source,
 )
-from cine_event_bot.core.progress import NullReporter
-from cine_event_bot.io.scrapers.base import VenueDetail
-from cine_event_bot.io.scrapers.paris_cine_info import (
+from lanterne.core.progress import NullReporter
+from lanterne.io.scrapers.base import VenueDetail
+from lanterne.io.scrapers.paris_cine_info import (
     ParisCineInfoScraper,
     build_showtime_item,
     parse_film_ratings,

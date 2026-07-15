@@ -67,7 +67,7 @@ Ollama model on the extraction task, run the golden-dataset harness (real LLM
 calls, so it needs a reachable `OLLAMA_BASE_URL`):
 
 ```fish
-uv run cine-event-bot eval-extraction
+uv run lanterne eval-extraction
 ```
 
 It runs the extractor over `eval/golden_extractions.json` (announcement texts
@@ -88,7 +88,7 @@ The rule-based specialness classifier (`core/specialness.py`, see
 since the classifier and its inputs are pure, in-memory data:
 
 ```fish
-uv run cine-event-bot eval-specialness
+uv run lanterne eval-specialness
 ```
 
 It runs the classifier over `eval/golden_specialness.json` (labeled

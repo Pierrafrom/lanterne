@@ -49,7 +49,7 @@ replace it), but `core/specialness.py`'s `rare_venue_count` and
 profile — a single-venue, low-frequency ciné-club slot — the same safety net
 ADR 0011 already relied on for MK2 and Le Louxor.
 
-- `lechampo.py` is deleted (`src/cine_event_bot/io/scrapers/`), along with
+- `lechampo.py` is deleted (`src/lanterne/io/scrapers/`), along with
   its test and fixture (`tests/test_lechampo.py`,
   `tests/fixtures/lechampo_cineclubs.html`), and removed from
   `io/scrapers/__init__.py::build_scrapers`.

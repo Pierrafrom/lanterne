@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from factories import make_extracted
 
-from cine_event_bot.core.validation import find_extraction_issues
+from lanterne.core.validation import find_extraction_issues
 
 _NOW = datetime(2026, 7, 6, 12, 0, tzinfo=UTC)
 

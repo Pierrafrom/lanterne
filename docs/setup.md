@@ -16,8 +16,8 @@ Full installation and configuration guide. For a one-minute overview see the
 ## Install
 
 ```fish
-git clone https://github.com/Pierrafrom/cine-event-bot
-cd cine-event-bot
+git clone https://github.com/Pierrafrom/lanterne
+cd lanterne
 uv sync --all-groups          # create the venv and install everything
 uv run pre-commit install     # enable the commit-time lint/format/type gate
 ```
@@ -30,17 +30,17 @@ cp .env.example .env
 
 Then fill `.env` (never commit it — it is gitignored):
 
-| Variable                   | Purpose                                                              |
-| -------------------------- | -------------------------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN`       | Bot token from @BotFather                                            |
-| `TMDB_API_KEY`             | TMDB v3 API key                                                      |
-| `OLLAMA_BASE_URL`          | Ollama base URL (e.g. `http://localhost:11434`)                      |
-| `OLLAMA_MODEL`             | Model name as listed by `ollama list` (e.g. `llama3.2:3b`)           |
-| `DATABASE_URL`             | Async SQLite URL (default `sqlite+aiosqlite:///./cine_event_bot.db`) |
-| `LOG_LEVEL`                | `DEBUG` / `INFO` / `WARNING` / `ERROR`                               |
-| `ADMIN_CHAT_ID`            | Optional — Telegram chat that receives the post-scrape report        |
-| `PARIS_CINE_INFO_LOGIN`    | Optional — email of a personal paris-cine.info account               |
-| `PARIS_CINE_INFO_PASSWORD` | Optional — its password                                              |
+| Variable                   | Purpose                                                        |
+| -------------------------- | -------------------------------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`       | Bot token from @BotFather                                      |
+| `TMDB_API_KEY`             | TMDB v3 API key                                                |
+| `OLLAMA_BASE_URL`          | Ollama base URL (e.g. `http://localhost:11434`)                |
+| `OLLAMA_MODEL`             | Model name as listed by `ollama list` (e.g. `llama3.2:3b`)     |
+| `DATABASE_URL`             | Async SQLite URL (default `sqlite+aiosqlite:///./lanterne.db`) |
+| `LOG_LEVEL`                | `DEBUG` / `INFO` / `WARNING` / `ERROR`                         |
+| `ADMIN_CHAT_ID`            | Optional — Telegram chat that receives the post-scrape report  |
+| `PARIS_CINE_INFO_LOGIN`    | Optional — email of a personal paris-cine.info account         |
+| `PARIS_CINE_INFO_PASSWORD` | Optional — its password                                        |
 
 `PARIS_CINE_INFO_LOGIN`/`PARIS_CINE_INFO_PASSWORD` enable the Paris Ciné Info
 source (see [ADR 0007](decisions/0007-paris-cine-info.md)) — an aggregator
@@ -76,22 +76,22 @@ screenings are skipped, and per-source extraction runs with bounded concurrency.
 
 ## Run
 
-`uv sync` installs a `cine-event-bot` console entry point, so commands are:
+`uv sync` installs a `lanterne` console entry point, so commands are:
 
 ```fish
-uv run cine-event-bot scrape           # scrape + enrich + persist (idempotent)
-uv run cine-event-bot stats            # summary of stored events
-uv run cine-event-bot weekly-digest    # broadcast the week's digest
-uv run cine-event-bot run-bot          # start the Telegram bot
-uv run cine-event-bot backup-db        # timestamped snapshot into ./backups/
-uv run cine-event-bot prune-db         # delete ordinary screenings older than 14 days
-uv run cine-event-bot eval-extraction  # score the LLM on the golden dataset
-uv run cine-event-bot eval-specialness # score the specialness classifier
-uv run cine-event-bot reset-db --yes   # drop + recreate all tables (wipes data)
-uv run cine-event-bot --help           # list every command
+uv run lanterne scrape           # scrape + enrich + persist (idempotent)
+uv run lanterne stats            # summary of stored events
+uv run lanterne weekly-digest    # broadcast the week's digest
+uv run lanterne run-bot          # start the Telegram bot
+uv run lanterne backup-db        # timestamped snapshot into ./backups/
+uv run lanterne prune-db         # delete ordinary screenings older than 14 days
+uv run lanterne eval-extraction  # score the LLM on the golden dataset
+uv run lanterne eval-specialness # score the specialness classifier
+uv run lanterne reset-db --yes   # drop + recreate all tables (wipes data)
+uv run lanterne --help           # list every command
 ```
 
-(`uv run python -m cine_event_bot <command>` still works identically.)
+(`uv run python -m lanterne <command>` still works identically.)
 
 **Re-running is safe**: `scrape` upserts on a deduplication key, so running it
 repeatedly never creates duplicates — it refreshes and enriches in place (see
@@ -159,14 +159,14 @@ resolving a relative date to the wrong window).
 
 ## Inspecting the database
 
-The store is a plain SQLite file (`cine_event_bot.db` by default). To browse it
+The store is a plain SQLite file (`lanterne.db` by default). To browse it
 inside VS Code:
 
 1. Install the **SQLite Viewer** extension (`qwtel.sqlite-viewer`) — read-only,
    zero-config: click the `.db` file to open a table browser. For running
    queries, use **SQLite** (`alexcvzz.vscode-sqlite`) instead and run
    *"SQLite: Open Database"* from the command palette.
-1. Open `cine_event_bot.db`; `screeningevent` holds the screenings (joined to
+1. Open `lanterne.db`; `screeningevent` holds the screenings (joined to
    `film` and `venue`), `eventsighting` the per-source provenance, and
    `subscriber` the digest opt-ins — see
    [ADR 0006](decisions/0006-relational-schema-split.md) for the full schema.
@@ -183,4 +183,4 @@ ORDER BY e.starts_at LIMIT 20;
 SELECT count(*) FROM screeningevent WHERE has_team_present = 1;  -- team-present previews
 ```
 
-Outside VS Code, the `sqlite3` CLI works too: `sqlite3 cine_event_bot.db`.
+Outside VS Code, the `sqlite3` CLI works too: `sqlite3 lanterne.db`.

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from cine_event_bot.core.dedup import (
+from lanterne.core.dedup import (
     canonicalize_venue_name,
     compute_dedup_key,
     normalize_text,

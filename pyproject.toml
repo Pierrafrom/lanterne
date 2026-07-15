@@ -1,5 +1,5 @@
 [project]
-name = "cine-event-bot"
+name = "lanterne"
 version = "0.1.0"
 description = "Auto-hosted Telegram bot aggregating special screenings in Paris/IDF with TMDB enrichment."
 requires-python = ">=3.11"
@@ -17,16 +17,16 @@ dependencies = [
     "typer>=0.26.7",
 ]
 
-# Console entry point: `uv run cine-event-bot <command>` (scrape, stats, ...).
+# Console entry point: `uv run lanterne <command>` (scrape, stats, ...).
 [project.scripts]
-cine-event-bot = "cine_event_bot.main:app"
+lanterne = "lanterne.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cine_event_bot"]
+packages = ["src/lanterne"]
 
 # Managed with uv: `uv sync` to install, `uv add <pkg>` / `uv add --dev <pkg>`
 # to add a dependency — never edit this list by hand and forget `uv.lock`.

@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from factories import DEFAULT_START, make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import Source
-from cine_event_bot.io.repository import EventRepository
+from lanterne.core.models import Source
+from lanterne.io.repository import EventRepository
 
 
 async def _count(repo: EventRepository) -> int:

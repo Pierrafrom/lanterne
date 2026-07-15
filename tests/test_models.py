@@ -4,7 +4,7 @@ import pytest
 from factories import make_extracted, make_sighting
 from pydantic import ValidationError
 
-from cine_event_bot.core.models import EventType, Film, Source, Venue
+from lanterne.core.models import EventType, Film, Source, Venue
 
 
 def test_source_enum_carries_domain_url() -> None:

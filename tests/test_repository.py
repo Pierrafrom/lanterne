@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import (
+from lanterne.core.models import (
     EventType,
     Film,
     RatingSource,
@@ -17,8 +17,8 @@ from cine_event_bot.core.models import (
     Venue,
     VenueKind,
 )
-from cine_event_bot.io.repository import EventRepository, SubscriberRepository
-from cine_event_bot.io.scrapers.base import RatingRecord, VenueDetail
+from lanterne.io.repository import EventRepository, SubscriberRepository
+from lanterne.io.scrapers.base import RatingRecord, VenueDetail
 
 
 async def _ingest(

@@ -1,6 +1,6 @@
 # Performance audit — where the pipeline's time actually goes
 
-Built from a real `uv run cine-event-bot scrape` run (2026-07-14, 16:29→17:30,
+Built from a real `uv run lanterne scrape` run (2026-07-14, 16:29→17:30,
 61 minutes total, 39,338 sightings processed, 0 failures) — timings below are
 measured from that run's own progress bars and structured logs
 (`logs/app.jsonl`), not estimated.
@@ -93,7 +93,7 @@ output fields) both land right on this CPU-bound, one-at-a-time baseline.
    4-5 fields from a short text block is exactly the kind of narrow,
    low-reasoning job a smaller model handles about as accurately at a
    fraction of the latency; worth a quick accuracy comparison via
-   `uv run cine-event-bot eval-extraction` before committing to a swap.
+   `uv run lanterne eval-extraction` before committing to a swap.
 1. **Keep extending this codebase's own already-established pattern of
    avoiding the LLM entirely when the data is already structured** — not a
    new idea here: Première Projo, offi.fr, and the retired `mk2.py` already

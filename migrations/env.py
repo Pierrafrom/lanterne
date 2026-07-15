@@ -2,7 +2,7 @@
 
 The database URL comes from the same source as the application: the
 ``DATABASE_URL`` environment variable or ``.env`` entry, with the same default
-as ``cine_event_bot.config.Settings``. Only the URL is read here — migrations
+as ``lanterne.config.Settings``. Only the URL is read here — migrations
 must not require the bot's tokens to be configured.
 """
 
@@ -18,14 +18,14 @@ from sqlmodel import SQLModel
 
 # Import the models module for its side effect: registering every table on
 # SQLModel.metadata so autogenerate sees the full schema.
-from cine_event_bot.core import models as _models  # noqa: F401
+from lanterne.core import models as _models  # noqa: F401
 
 config = context.config
 
 if config.config_file_name is not None:
     # disable_existing_loggers=False is required: fileConfig's default (True)
     # silently disables every logger already created before this call —
-    # every cine_event_bot.* logger, since the app's own get_logger() runs at
+    # every lanterne.* logger, since the app's own get_logger() runs at
     # import time, well before Database.migrate_to_head() (called at the
     # start of nearly every CLI command) reaches this line. Without this,
     # the very first migration of a process's lifetime permanently kills all
@@ -39,7 +39,7 @@ target_metadata = SQLModel.metadata
 class _DatabaseSettings(BaseSettings):
     """The application's database URL, without requiring the other secrets."""
 
-    database_url: str = "sqlite+aiosqlite:///./cine_event_bot.db"
+    database_url: str = "sqlite+aiosqlite:///./lanterne.db"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

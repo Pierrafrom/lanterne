@@ -5,8 +5,8 @@ from typing import Any
 
 from factories import make_display_event
 
-from cine_event_bot.core.models import ScreeningEvent, VenueKind
-from cine_event_bot.core.specialness import FilmContext, classify_specialness
+from lanterne.core.models import ScreeningEvent, VenueKind
+from lanterne.core.specialness import FilmContext, classify_specialness
 
 _STARTS_AT = datetime(2026, 7, 20, 20, 0, tzinfo=UTC)
 # Comfortably above both aggregate-rule thresholds, so tests targeting the

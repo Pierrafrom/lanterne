@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.core.models import EventType, Sighting, Source
-from cine_event_bot.core.progress import NullReporter
-from cine_event_bot.io.scrapers.premiereprojo import PremiereProjoScraper
+from lanterne.core.models import EventType, Sighting, Source
+from lanterne.core.progress import NullReporter
+from lanterne.io.scrapers.premiereprojo import PremiereProjoScraper
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 

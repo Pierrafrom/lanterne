@@ -7,17 +7,17 @@ from aiogram.enums import ParseMode
 from factories import make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, Source
-from cine_event_bot.core.qa import QueryCriteria
-from cine_event_bot.io.bot import (
+from lanterne.core.models import EventType, Source
+from lanterne.core.qa import QueryCriteria
+from lanterne.io.bot import (
     broadcast,
     build_dispatcher,
     handle_question,
     handle_subscribe,
     handle_unsubscribe,
 )
-from cine_event_bot.io.db import Database
-from cine_event_bot.io.repository import EventRepository, SubscriberRepository
+from lanterne.io.db import Database
+from lanterne.io.repository import EventRepository, SubscriberRepository
 
 
 async def test_handle_subscribe_records_and_confirms(session: AsyncSession) -> None:

@@ -3,9 +3,9 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-from cine_event_bot.config import Settings
-from cine_event_bot.core.models import EventType, ExtractedEvent
-from cine_event_bot.io.llm import (
+from lanterne.config import Settings
+from lanterne.core.models import EventType, ExtractedEvent
+from lanterne.io.llm import (
     _QA_SYSTEM_PROMPT,
     _SYSTEM_PROMPT,
     EventExtractor,

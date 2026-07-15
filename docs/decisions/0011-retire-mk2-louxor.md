@@ -59,7 +59,7 @@ Two compounding measurement problems, not a real coverage gap:
   usable data (a year-less-date extraction bug rejected both of that week's
   listings — see ADR 0010), so there is nothing to spot-check yet. Revisit
   once that bug is fixed and a real run produces Le Champo data again.
-- `mk2.py` and `louxor.py` are deleted (`src/cine_event_bot/io/scrapers/`),
+- `mk2.py` and `louxor.py` are deleted (`src/lanterne/io/scrapers/`),
   along with their tests and fixtures
   (`tests/test_mk2.py`, `tests/test_louxor.py`,
   `tests/fixtures/mk2_evenements.html`, `tests/fixtures/louxor_*.html`), and

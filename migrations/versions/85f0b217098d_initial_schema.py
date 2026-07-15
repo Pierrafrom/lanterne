@@ -12,7 +12,7 @@ import sqlalchemy as sa
 import sqlmodel
 from alembic import op
 
-import cine_event_bot.core.models
+import lanterne.core.models
 
 # revision identifiers, used by Alembic.
 revision: str = "85f0b217098d"
@@ -47,7 +47,7 @@ def upgrade() -> None:
         sa.Column("chat_id", sa.Integer(), nullable=False),
         sa.Column(
             "subscribed_at",
-            cine_event_bot.core.models.UtcDateTime(timezone=True),
+            lanterne.core.models.UtcDateTime(timezone=True),
             nullable=False,
         ),
         sa.Column("is_active", sa.Boolean(), nullable=False),
@@ -82,7 +82,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "starts_at",
-            cine_event_bot.core.models.UtcDateTime(timezone=True),
+            lanterne.core.models.UtcDateTime(timezone=True),
             nullable=False,
         ),
         sa.Column("has_team_present", sa.Boolean(), nullable=False),
@@ -125,7 +125,7 @@ def upgrade() -> None:
         sa.Column("source_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
             "scraped_at",
-            cine_event_bot.core.models.UtcDateTime(timezone=True),
+            lanterne.core.models.UtcDateTime(timezone=True),
             nullable=False,
         ),
         sa.ForeignKeyConstraint(

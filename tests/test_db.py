@@ -7,8 +7,8 @@ from sqlalchemy import text
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import ScreeningEvent
-from cine_event_bot.io.db import Database
+from lanterne.core.models import ScreeningEvent
+from lanterne.io.db import Database
 
 
 def _event() -> ScreeningEvent:

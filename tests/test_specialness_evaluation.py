@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from cine_event_bot.core.models import VenueKind
-from cine_event_bot.core.specialness_evaluation import (
+from lanterne.core.models import VenueKind
+from lanterne.core.specialness_evaluation import (
     GoldenCase,
     evaluate_cases,
     parse_golden_cases,

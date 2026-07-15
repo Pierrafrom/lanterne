@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime
 
-from cine_event_bot.core.frenchdate import resolve_next_occurrence, to_utc_datetime
+from lanterne.core.frenchdate import resolve_next_occurrence, to_utc_datetime
 
 
 def test_resolves_a_date_still_ahead_this_year() -> None:

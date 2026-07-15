@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from factories import make_display_event, make_sighting
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, ScreeningEvent
-from cine_event_bot.core.qa import QueryCriteria, format_qa_answer
-from cine_event_bot.io.repository import EventRepository
+from lanterne.core.models import EventType, ScreeningEvent
+from lanterne.core.qa import QueryCriteria, format_qa_answer
+from lanterne.io.repository import EventRepository
 
 
 async def _ingest(

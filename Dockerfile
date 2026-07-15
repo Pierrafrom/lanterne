@@ -20,4 +20,4 @@ USER botuser
 ENV LOG_LEVEL=INFO
 ENV PYTHONUNBUFFERED=1
 
-CMD ["uv", "run", "python", "-m", "cine_event_bot"]
+CMD ["uv", "run", "python", "-m", "lanterne"]

@@ -11,7 +11,7 @@ happen to see a genuinely new showtime at each fragmented room.
 
 Usage::
 
-    uv run cine-event-bot backup-db   # always back up first
+    uv run lanterne backup-db   # always back up first
     uv run python scripts/fix_mk2_venue_fragmentation.py
 """
 
@@ -19,10 +19,10 @@ import asyncio
 
 from sqlmodel import select
 
-from cine_event_bot.config import Settings
-from cine_event_bot.core.models import Venue
-from cine_event_bot.io.db import Database
-from cine_event_bot.io.repository import EventRepository
+from lanterne.config import Settings
+from lanterne.core.models import Venue
+from lanterne.io.db import Database
+from lanterne.io.repository import EventRepository
 
 # Confirmed live against paris-cine.info's get_showtimes.php on 2026-07-14
 # (see the room->tid discovery in this session's conversation): every
