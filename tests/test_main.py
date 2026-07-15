@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +11,7 @@ from typer.testing import CliRunner
 
 import lanterne.main as main_module
 from lanterne.config import Settings
+from lanterne.core.evaluation import EvaluationSummary
 from lanterne.core.models import Film, RatingSource
 from lanterne.core.report import IngestionReport, SourceOutcome
 from lanterne.core.stats import EventStats
@@ -82,6 +84,69 @@ def test_prune_db_command_reports_count(monkeypatch: pytest.MonkeyPatch) -> None
 
     assert result.exit_code == 0
     assert "42" in result.output
+
+
+def test_eval_extraction_command_scores_the_golden_dataset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_evaluation(
+        settings: Settings,  # noqa: ARG001
+        dataset: object,  # noqa: ARG001
+    ) -> EvaluationSummary:
+        return EvaluationSummary(
+            total_cases=1,
+            failures=0,
+            exact_match_rate=1.0,
+            field_accuracy={"title": 1.0},
+            mean_latency_seconds=0.1,
+            results=[],
+        )
+
+    monkeypatch.setattr("lanterne.main._run_evaluation", fake_run_evaluation)
+    result = CliRunner().invoke(app, ["eval-extraction"])
+
+    assert result.exit_code == 0
+    assert "Exact matches" in result.output
+
+
+def test_backup_db_command_reports_target_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_backup(output_dir: Path) -> Path:  # noqa: ARG001
+        return Path("backups/lanterne-20260101-000000.db")
+
+    monkeypatch.setattr("lanterne.main._backup_db", fake_backup)
+    result = CliRunner().invoke(app, ["backup-db"])
+
+    assert result.exit_code == 0
+    assert "lanterne-20260101-000000.db" in result.output
+
+
+def test_weekly_digest_command_reports_sent_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_weekly_digest() -> int:
+        return 5
+
+    monkeypatch.setattr("lanterne.main._run_weekly_digest", fake_run_weekly_digest)
+    result = CliRunner().invoke(app, ["weekly-digest"])
+
+    assert result.exit_code == 0
+    assert "5" in result.output
+
+
+def test_run_bot_command_wires_and_starts_the_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    async def fake_run_bot() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("lanterne.main._run_bot", fake_run_bot)
+    result = CliRunner().invoke(app, ["run-bot"])
+
+    assert result.exit_code == 0
+    assert called is True
 
 
 def test_backfill_ratings_command_reports_count(
