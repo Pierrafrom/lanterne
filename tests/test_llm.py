@@ -18,7 +18,9 @@ def _expected() -> ExtractedEvent:
         title="Dune: Part Two",
         event_type=EventType.AVANT_PREMIERE,
         venue="Le Grand Rex",
-        starts_at=datetime(2026, 7, 1, 20, 30, tzinfo=UTC),
+        # Naive: the model is asked for the local Paris digits verbatim, not
+        # a self-converted UTC value — see EventExtractor.extract.
+        starts_at=datetime(2026, 7, 1, 20, 30),
         has_team_present=True,
     )
 
@@ -35,7 +37,38 @@ async def test_extract_returns_structured_event() -> None:
 
     result = await extractor.extract("Avant-première de Dune au Grand Rex...")
 
-    assert result is expected
+    assert result.title == expected.title
+    assert result.event_type == expected.event_type
+    assert result.venue == expected.venue
+    assert result.has_team_present == expected.has_team_present
+
+
+async def test_extract_converts_the_model_s_local_paris_reading_to_utc() -> None:
+    """The model reads local digits verbatim; extract() converts to UTC.
+
+    12 July is CEST (UTC+2) — 20:30 local becomes 18:30 UTC.
+    """
+    extractor = EventExtractor(_mock_client(_expected()), model="llama3.2")
+
+    result = await extractor.extract("raw announcement text")
+
+    assert result.starts_at == datetime(2026, 7, 1, 18, 30, tzinfo=UTC)
+
+
+async def test_extract_ignores_any_tzinfo_the_model_attaches_anyway() -> None:
+    """A model that ignores the no-conversion instruction is overridden.
+
+    Whatever tzinfo the model attaches is discarded — the reading is always
+    anchored on Europe/Paris, never trusted as already-UTC.
+    """
+    mistaken = _expected().model_copy(
+        update={"starts_at": datetime(2026, 7, 1, 20, 30, tzinfo=UTC)}
+    )
+    extractor = EventExtractor(_mock_client(mistaken), model="llama3.2")
+
+    result = await extractor.extract("raw announcement text")
+
+    assert result.starts_at == datetime(2026, 7, 1, 18, 30, tzinfo=UTC)
 
 
 async def test_extract_requests_the_configured_model_and_schema() -> None:

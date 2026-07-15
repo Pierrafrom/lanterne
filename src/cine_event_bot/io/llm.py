@@ -7,7 +7,8 @@ scraped announcement into an :class:`ExtractedEvent`; :class:`QuestionInterprete
 turns a user's natural-language question into a :class:`QueryCriteria`.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 import instructor
 from openai import AsyncOpenAI
@@ -15,6 +16,8 @@ from openai import AsyncOpenAI
 from cine_event_bot.config import Settings
 from cine_event_bot.core.models import EventType, ExtractedEvent
 from cine_event_bot.core.qa import QueryCriteria
+
+_PARIS = ZoneInfo("Europe/Paris")
 
 # One reformatting retry on a validation error, then give up: a weak local model
 # that produces an invalid value (e.g. a sentence in an enum field) rarely fixes
@@ -43,12 +46,14 @@ _SYSTEM_PROMPT = (
     "the Paris region from the announcement text given by the user. "
     f"Classify event_type as one of: {_TYPE_CHOICES}. "
     "Set has_team_present to true only when the text states that the director "
-    "or cast attend. Parse the screening date and time into an absolute UTC "
-    "datetime; if the text gives a day and month without a year, use the "
+    "or cast attend. Read the screening date and time exactly as printed in "
+    "the text and set starts_at to those same digits, with no timezone "
+    "conversion: do not add a UTC offset or a 'Z' suffix, do not shift the "
+    "hour. If the text gives a day and month without a year, use the "
     "reference date stated in the text to pick the next upcoming occurrence. "
-    "Use the exact venue name as written. Set cycle_name to the retrospective "
-    "or festival cycle the screening belongs to when the text announces one, "
-    "otherwise leave it null."
+    "Use the exact venue name as written. Set cycle_name to the "
+    "retrospective or festival cycle the screening belongs to when the text "
+    "announces one, otherwise leave it null."
 )
 
 
@@ -77,9 +82,10 @@ class EventExtractor:
             raw_text: The announcement text for one screening, as scraped.
 
         Returns:
-            The validated screening data parsed from the text.
+            The validated screening data parsed from the text, with
+            ``starts_at`` converted to UTC.
         """
-        return await self._client.chat.completions.create(
+        extracted = await self._client.chat.completions.create(
             model=self._model,
             response_model=ExtractedEvent,
             max_retries=_MAX_RETRIES,
@@ -88,6 +94,24 @@ class EventExtractor:
                 {"role": "user", "content": raw_text},
             ],
         )
+        return extracted.model_copy(
+            update={"starts_at": _paris_local_to_utc(extracted.starts_at)}
+        )
+
+
+def _paris_local_to_utc(local: datetime) -> datetime:
+    """Convert the model's Paris wall-clock reading to an absolute UTC instant.
+
+    The prompt deliberately asks for the local digits verbatim rather than a
+    self-converted UTC value: live evaluation against ``eval/golden_extractions.json``
+    showed the model is unreliable at the UTC-offset/DST arithmetic itself
+    (exact match dropped, not improved, when the prompt asked it to convert) —
+    the same lesson this codebase already learned for year-less date
+    resolution (see ``io/scrapers/base.py::structure_via_llm``'s
+    ``known_starts_at`` docstring). Any tzinfo the model attaches anyway is
+    discarded so the reading is always anchored on Europe/Paris.
+    """
+    return local.replace(tzinfo=_PARIS).astimezone(UTC)
 
 
 _QA_SYSTEM_PROMPT = (
