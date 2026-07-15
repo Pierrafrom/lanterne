@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Auto-hosted Telegram bot aggregating special screenings in Paris/IDF with TMDB enrichment."
 requires-python = ">=3.11"
 dependencies = [
-    "aiogram>=3.29.0",
+    "aiogram>=3.29.1",
     "aiosqlite>=0.22.1",
     "alembic>=1.18.5",
     "beautifulsoup4>=4.15.0",
