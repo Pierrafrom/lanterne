@@ -6,12 +6,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from cine_event_bot.core.models import EventType, ExtractedEvent, Sighting, Source
+from cine_event_bot.core.models import (
+    EventType,
+    ExtractedEvent,
+    RatingSource,
+    Sighting,
+    Source,
+)
 from cine_event_bot.core.progress import NullReporter
 from cine_event_bot.io.scrapers.base import VenueDetail
 from cine_event_bot.io.scrapers.paris_cine_info import (
     ParisCineInfoScraper,
     build_showtime_item,
+    parse_film_ratings,
     parse_venue_passes,
 )
 
@@ -506,3 +513,113 @@ async def test_fetch_venue_details_omits_a_venue_with_no_theater_data() -> None:
     details = await scraper.fetch_venue_details(client)
 
     assert details == {}
+
+
+def _rated_movie(**overrides: Any) -> dict[str, Any]:
+    # A real entry from get_movies.php, confirmed live (Cléo de 5 à 7).
+    movie = {
+        "i_id": "0055852",
+        "im_r": 7.8,
+        "ap_r": 0,
+        "as_r": 4.1,
+        "sc_r": 7.4,
+        "sc_u": "Cleo_de_5_a_7/446018",
+        "rt_r": 93,
+        "rt_u": "/m/cleo_de_5_a_7",
+        "mc_r": 87,
+        "mc_u": "/cleo-from-5-to-7",
+        "lb_r": 4.2,
+        "lb_u": "cleo-from-5-to-7",
+    }
+    movie.update(overrides)
+    return movie
+
+
+class TestParseFilmRatings:
+    def test_maps_every_source_present(self) -> None:
+        parsed = parse_film_ratings(_rated_movie())
+
+        assert parsed is not None
+        imdb_id, records = parsed
+        assert imdb_id == "tt0055852"
+        by_source = {record.source: record for record in records}
+        assert by_source[RatingSource.IMDB].rating == 7.8
+        assert (
+            by_source[RatingSource.IMDB].url == "https://www.imdb.com/title/tt0055852/"
+        )
+        assert by_source[RatingSource.ALLOCINE_AUDIENCE].rating == 4.1
+        assert by_source[RatingSource.ALLOCINE_AUDIENCE].url is None
+        assert by_source[RatingSource.SENSCRITIQUE].rating == 7.4
+        assert (
+            by_source[RatingSource.SENSCRITIQUE].url
+            == "https://www.senscritique.com/film/Cleo_de_5_a_7/446018"
+        )
+        assert by_source[RatingSource.ROTTEN_TOMATOES].rating == 93
+        assert (
+            by_source[RatingSource.ROTTEN_TOMATOES].url
+            == "https://www.rottentomatoes.com/m/cleo_de_5_a_7"
+        )
+        assert by_source[RatingSource.METACRITIC].rating == 87
+        assert (
+            by_source[RatingSource.METACRITIC].url
+            == "https://www.metacritic.com/movie/cleo-from-5-to-7/"
+        )
+        assert by_source[RatingSource.LETTERBOXD].rating == 4.2
+        assert (
+            by_source[RatingSource.LETTERBOXD].url
+            == "https://letterboxd.com/film/cleo-from-5-to-7/"
+        )
+
+    def test_omits_a_zero_valued_source_as_no_data(self) -> None:
+        # ap_r: 0 in _rated_movie() is PCI's own "no data" convention.
+        parsed = parse_film_ratings(_rated_movie())
+
+        assert parsed is not None
+        _, records = parsed
+        assert RatingSource.ALLOCINE_PRESS not in {r.source for r in records}
+
+    def test_returns_none_without_an_imdb_id(self) -> None:
+        assert parse_film_ratings(_rated_movie(i_id="")) is None
+        assert (
+            parse_film_ratings({k: v for k, v in _rated_movie().items() if k != "i_id"})
+            is None
+        )
+
+    def test_handles_a_film_with_no_ratings_at_all(self) -> None:
+        parsed = parse_film_ratings({"i_id": "0055852"})
+
+        assert parsed == ("tt0055852", [])
+
+
+async def test_fetch_film_ratings_logs_in_and_returns_ratings_keyed_by_imdb_id() -> (
+    None
+):
+    scraper = ParisCineInfoScraper(
+        _extractor_returning(_sample_extracted()), "user@example.test", "secret"
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=_FakeResponse(text="login_success"))
+    client.get = AsyncMock(
+        return_value=_FakeResponse(json_data={"data": [_rated_movie()]})
+    )
+
+    ratings = await scraper.fetch_film_ratings(client)
+
+    assert set(ratings.keys()) == {"tt0055852"}
+    assert any(r.source is RatingSource.IMDB for r in ratings["tt0055852"])
+    client.post.assert_awaited_once()
+
+
+async def test_fetch_film_ratings_omits_a_film_with_no_usable_ratings() -> None:
+    scraper = ParisCineInfoScraper(
+        _extractor_returning(_sample_extracted()), "user@example.test", "secret"
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=_FakeResponse(text="login_success"))
+    client.get = AsyncMock(
+        return_value=_FakeResponse(json_data={"data": [{"i_id": "0055852"}]})
+    )
+
+    ratings = await scraper.fetch_film_ratings(client)
+
+    assert ratings == {}

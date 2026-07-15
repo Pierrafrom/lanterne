@@ -3,9 +3,14 @@
 A thin async client over TMDB's v3 API — a title search picks the film, then
 one details call (with ``append_to_response=credits``) fetches everything the
 :class:`Film` row persists: original title, director, release year, runtime,
-genres, synopsis, poster, and rating. Enrichment runs once per film row —
-every screening of the film shares it. Network failures are the caller's
-concern; the client only maps successful responses.
+genres, synopsis, poster, backdrop, IMDb id, and rating. ``imdb_id`` and
+``backdrop_path`` are native top-level fields on the details response, no
+extra call needed; ``imdb_id`` doubles as the join key Paris Ciné Info's
+rating catalogue is matched against (see
+``docs/decisions/0013-film-ratings-from-paris-cine-info.md``). Enrichment
+runs once per film row — every screening of the film shares it. Network
+failures are the caller's concern; the client only maps successful
+responses.
 """
 
 from dataclasses import dataclass
@@ -18,6 +23,7 @@ from cine_event_bot.core.models import Film
 _SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
 _DETAILS_URL = "https://api.themoviedb.org/3/movie/{tmdb_id}"
 _IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+_BACKDROP_BASE_URL = "https://image.tmdb.org/t/p/w1280"
 _DIRECTOR_JOB = "Director"
 
 
@@ -27,6 +33,9 @@ class MovieMatch:
 
     Attributes:
         tmdb_id: TMDB identifier of the matched film.
+        imdb_id: IMDb identifier, a native field on the details response —
+            used as the join key to Paris Ciné Info's rating catalogue (see
+            ``io/repository.py::EventRepository.update_film_ratings``).
         original_title: Original-language title, when TMDB provides one.
         director: Director name(s), comma-joined when there are several.
         release_year: Release year, when a release date is known.
@@ -34,10 +43,13 @@ class MovieMatch:
         genres: Genre names, when TMDB lists any.
         overview: Synopsis, when TMDB provides one.
         poster_url: Absolute poster URL, when a poster exists.
+        backdrop_url: Absolute backdrop (landscape hero image) URL, when one
+            exists.
         vote_average: TMDB rating (0-10), when rated.
     """
 
     tmdb_id: int
+    imdb_id: str | None
     original_title: str | None
     director: str | None
     release_year: int | None
@@ -45,6 +57,7 @@ class MovieMatch:
     genres: tuple[str, ...] | None
     overview: str | None
     poster_url: str | None
+    backdrop_url: str | None
     vote_average: float | None
 
 
@@ -78,6 +91,27 @@ class TmdbClient:
         if tmdb_id is None:
             return None
         return _to_match(await self._details(tmdb_id))
+
+    async def get_by_id(self, tmdb_id: int) -> MovieMatch | None:
+        """Fetch a film's full metadata directly by its already-known TMDB id.
+
+        Unlike :meth:`find`, skips the title search — used when the TMDB id
+        is already certain (e.g. ``backfill-ratings``, re-fetching a film
+        enriched before ``Film.imdb_id``/``backdrop_url`` existed) rather
+        than re-resolved from a possibly-ambiguous title.
+
+        Args:
+            tmdb_id: TMDB identifier to fetch.
+
+        Returns:
+            The film's metadata, or None when TMDB has no such id.
+        """
+        try:
+            return _to_match(await self._details(tmdb_id))
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 404:
+                return None
+            raise
 
     async def _search_first_id(self, title: str) -> int | None:
         """Return the TMDB id of the best title match, or None."""
@@ -139,6 +173,8 @@ class TmdbEnricher:
         film.genres = list(match.genres) if match.genres is not None else None
         film.overview = match.overview
         film.poster_url = match.poster_url
+        film.backdrop_url = match.backdrop_url
+        film.imdb_id = match.imdb_id
         film.vote_average = match.vote_average
 
 
@@ -158,8 +194,10 @@ def build_tmdb_enricher(client: httpx.AsyncClient, api_key: str) -> TmdbEnricher
 def _to_match(details: dict[str, Any]) -> MovieMatch:
     """Map a movie-details payload (credits appended) to a :class:`MovieMatch`."""
     poster_path = details.get("poster_path")
+    backdrop_path = details.get("backdrop_path")
     return MovieMatch(
         tmdb_id=int(details["id"]),
+        imdb_id=_non_empty_str(details.get("imdb_id")),
         original_title=_non_empty_str(details.get("original_title")),
         director=_director(details),
         release_year=_release_year(details.get("release_date")),
@@ -168,6 +206,9 @@ def _to_match(details: dict[str, Any]) -> MovieMatch:
         overview=_non_empty_str(details.get("overview")),
         poster_url=f"{_IMAGE_BASE_URL}{poster_path}"
         if isinstance(poster_path, str)
+        else None,
+        backdrop_url=f"{_BACKDROP_BASE_URL}{backdrop_path}"
+        if isinstance(backdrop_path, str)
         else None,
         vote_average=_rating(details.get("vote_average")),
     )

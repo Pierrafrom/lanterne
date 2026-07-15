@@ -42,7 +42,8 @@ from cine_event_bot.io.db import Database
 from cine_event_bot.io.llm import build_extractor, build_interpreter
 from cine_event_bot.io.repository import EventRepository, SubscriberRepository
 from cine_event_bot.io.scrapers import build_scrapers
-from cine_event_bot.io.tmdb import build_tmdb_enricher
+from cine_event_bot.io.scrapers.paris_cine_info import ParisCineInfoScraper
+from cine_event_bot.io.tmdb import TmdbClient, build_tmdb_enricher
 from cine_event_bot.pipeline import IngestionPipeline
 
 app = typer.Typer(help="cine-event-bot admin CLI")
@@ -118,6 +119,83 @@ async def _notify_admin(
         )
     finally:
         await bot.session.close()
+
+
+@app.command(name="backfill-ratings")
+def backfill_ratings() -> None:
+    """Backfill backdrop/IMDb id and ratings for films enriched before this existed.
+
+    One-off catch-up for ``Film`` rows that already had a TMDB match before
+    ``imdb_id``/``backdrop_url``/``FilmRating`` existed (see
+    ``docs/decisions/0013-film-ratings-from-paris-cine-info.md``) — the
+    normal scrape only ever enriches a film once
+    (``IngestionPipeline._enrich``'s ``tmdb_id is not None`` guard), so
+    these rows are otherwise never revisited.
+    """
+    updated = asyncio.run(_run_backfill_ratings())
+    typer.echo(f"Backfilled {updated} film(s) with a TMDB backdrop/IMDb id.")
+
+
+async def _run_backfill_ratings() -> int:
+    """Re-fetch TMDB details for every IMDb-id gap, then re-match PCI ratings."""
+    settings = Settings()
+    database = Database(settings.database_url)
+    await database.migrate_to_head()
+    try:
+        async with (
+            httpx.AsyncClient(
+                timeout=_HTTP_TIMEOUT_SECONDS,
+                follow_redirects=True,
+                headers={"User-Agent": "cine-event-bot"},
+            ) as client,
+            database.session() as session,
+        ):
+            repository = EventRepository(session)
+            tmdb_client = TmdbClient(client, settings.tmdb_api_key)
+            updated = await _backfill_tmdb_fields(repository, tmdb_client)
+            await _backfill_film_ratings(settings, repository, client)
+    finally:
+        await database.dispose()
+    return updated
+
+
+async def _backfill_tmdb_fields(
+    repository: EventRepository, tmdb_client: TmdbClient
+) -> int:
+    """Re-fetch TMDB details (backdrop/imdb id) for every film still missing one."""
+    films = await repository.list_films_missing_imdb_id()
+    updated = 0
+    for film in films:
+        if film.tmdb_id is None:
+            continue
+        match = await tmdb_client.get_by_id(film.tmdb_id)
+        if match is None or match.imdb_id is None:
+            continue
+        film.imdb_id = match.imdb_id
+        film.backdrop_url = match.backdrop_url
+        await repository.save_film(film)
+        updated += 1
+    return updated
+
+
+async def _backfill_film_ratings(
+    settings: Settings, repository: EventRepository, client: httpx.AsyncClient
+) -> None:
+    """Re-run the Paris Ciné Info ratings match, when the source is configured.
+
+    A no-op when the account credentials are not set — same "entirely
+    optional" treatment as ``build_scrapers``' own Paris Ciné Info wiring
+    (see ADR 0007).
+    """
+    if not settings.paris_cine_info_login or not settings.paris_cine_info_password:
+        return
+    scraper = ParisCineInfoScraper(
+        build_extractor(settings),
+        settings.paris_cine_info_login,
+        settings.paris_cine_info_password,
+    )
+    ratings = await scraper.fetch_film_ratings(client)
+    await repository.update_film_ratings(ratings)
 
 
 @app.command()

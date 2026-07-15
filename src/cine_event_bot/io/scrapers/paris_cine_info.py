@@ -51,6 +51,15 @@ identifier ``EventRepository._resolve_venue`` uses to recognize the same
 physical venue across sources that describe it with different wording
 (see ``docs/decisions/0012-retire-lechampo.md``'s venue-name fragmentation
 follow-up), the same role TMDB's id already plays for films.
+
+Each ``get_movies.php`` entry also carries pre-aggregated ratings from
+IMDb, Allociné (press and audience), SensCritique, Rotten Tomatoes,
+Metacritic, and Letterboxd — :meth:`fetch_film_ratings` parses these into
+:class:`~cine_event_bot.io.scrapers.base.RatingRecord` objects, keyed by
+IMDb id. See
+``docs/decisions/0013-film-ratings-from-paris-cine-info.md`` for why this
+project sources every film rating from here rather than querying those
+sites directly.
 """
 
 import asyncio
@@ -63,10 +72,11 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from cine_event_bot.core.models import ExtractedEvent, Sighting, Source
+from cine_event_bot.core.models import ExtractedEvent, RatingSource, Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.llm import EventExtractor
 from cine_event_bot.io.scrapers.base import (
+    RatingRecord,
     RawListing,
     VenueDetail,
     gather_events,
@@ -295,6 +305,39 @@ class ParisCineInfoScraper:
         response.raise_for_status()
         return parse_venue_passes(response.text)
 
+    async def fetch_film_ratings(
+        self, client: httpx.AsyncClient
+    ) -> dict[str, list[RatingRecord]]:
+        """Fetch and parse every currently-showing film's ratings.
+
+        Implements :class:`~cine_event_bot.io.scrapers.base.FilmRatingSource`.
+        Uses the full catalogue :meth:`_fetch_movies` returns (no
+        ``events`` filter — every film Paris Ciné Info currently lists as
+        showing somewhere in its partner network, not just the curated
+        "événement" subset :meth:`fetch_events` restricts itself to), since
+        a rating is useful regardless of whether the screening itself is
+        special.
+
+        Args:
+            client: Shared async HTTP client used for every request.
+
+        Returns:
+            A mapping of IMDb id to that film's known ratings (see
+            :func:`parse_film_ratings`); a film with no IMDb id or no
+            rating from any source is omitted.
+        """
+        await self._log_in(client)
+        movies = await self._fetch_movies(client)
+        ratings: dict[str, list[RatingRecord]] = {}
+        for movie in movies:
+            parsed = parse_film_ratings(movie)
+            if parsed is None:
+                continue
+            imdb_id, records = parsed
+            if records:
+                ratings[imdb_id] = records
+        return ratings
+
     async def fetch_venue_details(
         self, client: httpx.AsyncClient
     ) -> dict[str, VenueDetail]:
@@ -492,6 +535,112 @@ def _parse_datetime(value: object) -> datetime | None:
     except ValueError:
         return None
     return naive.replace(tzinfo=_PARIS).astimezone(UTC)
+
+
+def parse_film_ratings(
+    movie: dict[str, Any],
+) -> tuple[str, list[RatingRecord]] | None:
+    """Map one ``get_movies.php`` entry to its IMDb id and known ratings.
+
+    Args:
+        movie: One entry from ``get_movies.php``'s ``data`` array.
+
+    Returns:
+        The film's IMDb id (``"tt"`` followed by ``movie["i_id"]``) paired
+        with its non-empty ratings, or None when the entry carries no IMDb
+        id to key on.
+    """
+    raw_imdb_id = movie.get("i_id")
+    if not isinstance(raw_imdb_id, str) or not raw_imdb_id:
+        return None
+    imdb_id = f"tt{raw_imdb_id}"
+
+    records = [
+        record
+        for record in (
+            _rating(
+                RatingSource.IMDB,
+                movie.get("im_r"),
+                f"https://www.imdb.com/title/{imdb_id}/",
+            ),
+            _rating(RatingSource.ALLOCINE_PRESS, movie.get("ap_r"), None),
+            _rating(RatingSource.ALLOCINE_AUDIENCE, movie.get("as_r"), None),
+            _rating(
+                RatingSource.SENSCRITIQUE,
+                movie.get("sc_r"),
+                _senscritique_url(movie.get("sc_u")),
+            ),
+            _rating(
+                RatingSource.ROTTEN_TOMATOES,
+                movie.get("rt_r"),
+                _rotten_tomatoes_url(movie.get("rt_u")),
+            ),
+            _rating(
+                RatingSource.METACRITIC,
+                movie.get("mc_r"),
+                _metacritic_url(movie.get("mc_u")),
+            ),
+            _rating(
+                RatingSource.LETTERBOXD,
+                movie.get("lb_r"),
+                _letterboxd_url(movie.get("lb_u")),
+            ),
+        )
+        if record is not None
+    ]
+    return imdb_id, records
+
+
+def _rating(
+    source: RatingSource, value: object, url: str | None
+) -> RatingRecord | None:
+    """Build a rating record when ``value`` is a usable positive score.
+
+    ``get_movies.php`` represents "no data for this source" as ``0``
+    (confirmed live: a missing Allociné press score is ``0`` alongside a
+    populated audience score on the same entry) rather than omitting the
+    field or using ``null`` — filtered out here rather than persisted as a
+    real zero rating.
+    """
+    if not isinstance(value, int | float) or value <= 0:
+        return None
+    return RatingRecord(source=source, rating=float(value), url=url)
+
+
+def _senscritique_url(slug: object) -> str | None:
+    """Build a SensCritique film URL from the API's ``sc_u`` slug field."""
+    return (
+        f"https://www.senscritique.com/film/{slug}"
+        if isinstance(slug, str) and slug
+        else None
+    )
+
+
+def _rotten_tomatoes_url(path: object) -> str | None:
+    """Build a Rotten Tomatoes film URL from the API's ``rt_u`` path field."""
+    return (
+        f"https://www.rottentomatoes.com{path}"
+        if isinstance(path, str) and path
+        else None
+    )
+
+
+def _metacritic_url(path: object) -> str | None:
+    """Build a Metacritic film URL from the API's ``mc_u`` path field."""
+    return (
+        f"https://www.metacritic.com/movie{path}/"
+        if isinstance(path, str) and path
+        else None
+    )
+
+
+def _letterboxd_url(slug: object) -> str | None:
+    """Build a Letterboxd film URL from the API's ``lb_u`` slug field."""
+    return (
+        f"https://letterboxd.com/film/{slug}/"
+        if isinstance(slug, str) and slug
+        else None
+    )
 
 
 def parse_venue_passes(html: str) -> dict[str, list[str]]:

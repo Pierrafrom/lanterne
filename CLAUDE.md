@@ -9,7 +9,10 @@ Auto-hosted Telegram bot for cinema screenings in Paris/IDF: a weekly digest
 of curated **special screenings** (avant-premières with team, cine-concerts,
 retrospectives, open-air, festivals, cult screenings, ciné-clubs, short-film
 programmes), and a natural-language Q&A over every stored screening using
-TMDB data.
+TMDB data. Each film also carries a TMDB backdrop image and, when Paris
+Ciné Info's catalogue has a match, ratings from IMDb, Allociné, SensCritique,
+Rotten Tomatoes, Metacritic, and Letterboxd — see
+[ADR 0013](docs/decisions/0013-film-ratings-from-paris-cine-info.md).
 
 The database is being expanded from "special screenings only" to "every
 screening, with specialness detected after ingestion" — see
@@ -101,6 +104,7 @@ uv run cine-event-bot stats           # summary of stored events
 uv run cine-event-bot weekly-digest   # broadcast the week's digest
 uv run cine-event-bot backup-db       # timestamped snapshot into ./backups/
 uv run cine-event-bot prune-db        # delete ordinary screenings older than 14 days
+uv run cine-event-bot backfill-ratings # one-off: backdrop/imdb id/ratings for pre-existing films
 uv run cine-event-bot run-bot         # start the Telegram bot
 uv run cine-event-bot reset-db --yes  # drop + recreate all tables (wipes data)
 ```

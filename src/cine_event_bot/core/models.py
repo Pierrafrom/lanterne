@@ -11,6 +11,9 @@ schema is normalized around the screening (see
   facts plus their provenance, ready for ingestion.
 - :class:`Film` — one row per film, shared by all its screenings; carries the
   TMDB enrichment.
+- :class:`FilmRating` — one row per (film, external rating source), sourced
+  from Paris Ciné Info's authenticated film catalogue (see
+  ``docs/decisions/0013-film-ratings-from-paris-cine-info.md``).
 - :class:`Venue` — one row per venue, keyed by its normalized name.
 - :class:`ScreeningEvent` — the persisted screening, referencing its film and
   venue and holding the deduplication key. Every screening is stored, not
@@ -101,6 +104,25 @@ class Source(StrEnum):
     LA_VILLETTE = "lavillette.com"
     MK2 = "mk2.com"
     OFFI = "offi.fr"
+
+
+class RatingSource(StrEnum):
+    """External site a film rating in :class:`FilmRating` was sourced from.
+
+    Every value is read from Paris Ciné Info's own authenticated film
+    catalogue (see ``io/scrapers/paris_cine_info.py::parse_film_ratings``
+    and ``docs/decisions/0013-film-ratings-from-paris-cine-info.md``) — this
+    project never queries IMDb, Allociné, SensCritique, Rotten Tomatoes, or
+    Letterboxd directly.
+    """
+
+    IMDB = "imdb"
+    ALLOCINE_PRESS = "allocine_press"
+    ALLOCINE_AUDIENCE = "allocine_audience"
+    SENSCRITIQUE = "senscritique"
+    ROTTEN_TOMATOES = "rotten_tomatoes"
+    METACRITIC = "metacritic"
+    LETTERBOXD = "letterboxd"
 
 
 class VenueKind(StrEnum):
@@ -202,6 +224,10 @@ class Film(SQLModel, table=True):
             match exists.
         title: Film title as first announced (display form).
         tmdb_id: TMDB identifier, once matched.
+        imdb_id: IMDb identifier (e.g. ``"tt0055852"``), once enriched — a
+            native field on TMDB's movie-details response, used as the join
+            key to Paris Ciné Info's rating catalogue (see
+            ``io/repository.py::EventRepository.update_film_ratings``).
         original_title: Original-language title, once enriched.
         director: Director name(s), once enriched.
         release_year: Release year, once enriched.
@@ -209,6 +235,8 @@ class Film(SQLModel, table=True):
         genres: Genre names, once enriched.
         overview: Synopsis, once enriched.
         poster_url: Absolute poster URL, once enriched.
+        backdrop_url: Absolute backdrop (landscape hero image) URL, once
+            enriched.
         vote_average: TMDB rating (0–10), once enriched.
     """
 
@@ -217,6 +245,7 @@ class Film(SQLModel, table=True):
     title: str
 
     tmdb_id: int | None = Field(default=None, unique=True)
+    imdb_id: str | None = Field(default=None, unique=True, index=True)
     original_title: str | None = None
     director: str | None = None
     release_year: int | None = None
@@ -224,9 +253,42 @@ class Film(SQLModel, table=True):
     genres: list[str] | None = Field(default=None, sa_type=JSON)
     overview: str | None = None
     poster_url: str | None = None
+    backdrop_url: str | None = None
     vote_average: float | None = None
 
     screenings: list["ScreeningEvent"] = Relationship(back_populates="film")
+
+
+class FilmRating(SQLModel, table=True):
+    """One external site's rating of a film, sourced from Paris Ciné Info.
+
+    One row per ``(film, source)`` pair — mirrors :class:`EventSighting`'s
+    one-row-per-(event, source) shape rather than widening :class:`Film`
+    with a column per rating source. See
+    ``docs/decisions/0013-film-ratings-from-paris-cine-info.md``.
+
+    Attributes:
+        id: Surrogate primary key.
+        film_id: The rated film.
+        source: External site this rating was sourced from.
+        rating: The rating value, on that source's own native scale (0–5,
+            0–10, or 0–100 depending on ``source`` — see
+            :class:`RatingSource`'s docstring and
+            ``io/scrapers/paris_cine_info.py::parse_film_ratings``).
+        url: Direct link to the film on that source, when Paris Ciné Info's
+            catalogue carries one (absent for the two Allociné sources —
+            it exposes no Allociné slug).
+        fetched_at: When this rating was last refreshed, timezone-aware UTC.
+    """
+
+    __table_args__ = (UniqueConstraint("film_id", "source"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    film_id: int = Field(foreign_key="film.id", index=True)
+    source: RatingSource
+    rating: float
+    url: str | None = None
+    fetched_at: datetime = Field(sa_type=UtcDateTime)
 
 
 class Venue(SQLModel, table=True):

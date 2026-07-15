@@ -19,7 +19,7 @@ from typing import Protocol, TypeVar, runtime_checkable
 
 import httpx
 
-from cine_event_bot.core.models import Sighting, Source
+from cine_event_bot.core.models import RatingSource, Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.core.validation import find_extraction_issues
 from cine_event_bot.io.llm import EventExtractor
@@ -256,6 +256,50 @@ class VenueDetailSource(Protocol):
             A mapping of venue display name to its :class:`VenueDetail`; a
             venue with nothing known is omitted rather than mapped to an
             empty/default instance.
+        """
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class RatingRecord:
+    """One external site's rating of a film, persisted as a :class:`FilmRating`.
+
+    Attributes:
+        source: External site this rating was sourced from.
+        rating: The rating value, on that source's own native scale.
+        url: Direct link to the film on that source, when known.
+    """
+
+    source: RatingSource
+    rating: float
+    url: str | None = None
+
+
+@runtime_checkable
+class FilmRatingSource(Protocol):
+    """A source able to report per-film ratings from external rating sites.
+
+    Optional capability, not part of :class:`SourceScraper` — today only
+    Paris Ciné Info carries this data (see
+    ``io/scrapers/paris_cine_info.py::ParisCineInfoScraper.fetch_film_ratings``
+    and ``docs/decisions/0013-film-ratings-from-paris-cine-info.md``).
+    Detected the same way as :class:`VenuePassSource`/:class:`VenueDetailSource`:
+    via ``isinstance`` against this ``runtime_checkable`` Protocol (see
+    ``pipeline.py::IngestionPipeline._apply_film_ratings``).
+    """
+
+    async def fetch_film_ratings(
+        self, client: httpx.AsyncClient
+    ) -> dict[str, list[RatingRecord]]:
+        """Return every known film's ratings, keyed by IMDb id.
+
+        Args:
+            client: Shared async HTTP client used for every request.
+
+        Returns:
+            A mapping of IMDb id (``"tt"`` followed by digits, matching
+            ``Film.imdb_id``'s format) to that film's :class:`RatingRecord`
+            list; a film with no rating known from any source is omitted.
         """
         ...
 

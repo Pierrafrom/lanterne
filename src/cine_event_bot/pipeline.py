@@ -19,15 +19,20 @@ a partial, scraper-order-dependent count (e.g. the first venue ingested for a
 film that turns out to be widely released would see a venue count of 1 and
 wrongly qualify as "rare") that, once a verdict fires, is never revisited.
 
-Two further end-of-run passes enrich already-stored venues, each for any
-scraper that implements the relevant optional capability (today only Paris
-Ciné Info for both) — detected via ``isinstance`` against a
-``runtime_checkable`` Protocol rather than special-casing one source:
-:meth:`IngestionPipeline._apply_venue_passes` (accepted subscription cards,
-:class:`~cine_event_bot.io.scrapers.base.VenuePassSource`) and
+Three further end-of-run passes enrich already-stored venues and films,
+each for any scraper that implements the relevant optional capability
+(today only Paris Ciné Info for all three) — detected via ``isinstance``
+against a ``runtime_checkable`` Protocol rather than special-casing one
+source: :meth:`IngestionPipeline._apply_venue_passes` (accepted
+subscription cards,
+:class:`~cine_event_bot.io.scrapers.base.VenuePassSource`),
 :meth:`IngestionPipeline._apply_venue_details` (address, official site,
 room-level seat count/screen size,
-:class:`~cine_event_bot.io.scrapers.base.VenueDetailSource`).
+:class:`~cine_event_bot.io.scrapers.base.VenueDetailSource`), and
+:meth:`IngestionPipeline._apply_film_ratings` (IMDb/Allociné/SensCritique/
+Rotten Tomatoes/Metacritic/Letterboxd ratings,
+:class:`~cine_event_bot.io.scrapers.base.FilmRatingSource` — see
+``docs/decisions/0013-film-ratings-from-paris-cine-info.md``).
 
 Every classified screening's full feature vector and verdict is logged as
 structured JSONL (``msg="specialness verdict"``, see
@@ -57,6 +62,7 @@ from cine_event_bot.core.specialness import (
 )
 from cine_event_bot.io.repository import EventRepository
 from cine_event_bot.io.scrapers.base import (
+    FilmRatingSource,
     SourceScraper,
     VenueDetailSource,
     VenuePassSource,
@@ -139,6 +145,7 @@ class IngestionPipeline:
         await self._classify_pending_specialness()
         await self._apply_venue_passes(client)
         await self._apply_venue_details(client)
+        await self._apply_film_ratings(client)
         report = IngestionReport(outcomes=outcomes)
         logger.info(
             "ingestion complete",
@@ -344,6 +351,27 @@ class IngestionPipeline:
                 )
                 continue
             await self._repository.update_venue_details(details)
+
+    async def _apply_film_ratings(self, client: httpx.AsyncClient) -> None:
+        """Enrich already-stored films with ratings from an optional source.
+
+        A scraper with no :class:`~cine_event_bot.io.scrapers.base.FilmRatingSource`
+        capability is silently skipped; a failing fetch is logged so one
+        source's ratings never abort the run, matching
+        :meth:`_apply_venue_passes` and :meth:`_apply_venue_details`.
+        """
+        for scraper in self._scrapers:
+            if not isinstance(scraper, FilmRatingSource):
+                continue
+            try:
+                ratings = await scraper.fetch_film_ratings(client)
+            except Exception:
+                logger.exception(
+                    "film ratings fetch failed",
+                    extra={"ctx": {"source": scraper.source.value}},
+                )
+                continue
+            await self._repository.update_film_ratings(ratings)
 
 
 def _log_specialness_verdict(

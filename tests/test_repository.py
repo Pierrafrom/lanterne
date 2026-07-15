@@ -9,9 +9,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from cine_event_bot.core.models import EventType, Film, ScreeningEvent, Venue, VenueKind
+from cine_event_bot.core.models import (
+    EventType,
+    Film,
+    RatingSource,
+    ScreeningEvent,
+    Venue,
+    VenueKind,
+)
 from cine_event_bot.io.repository import EventRepository, SubscriberRepository
-from cine_event_bot.io.scrapers.base import VenueDetail
+from cine_event_bot.io.scrapers.base import RatingRecord, VenueDetail
 
 
 async def _ingest(
@@ -678,6 +685,65 @@ async def test_update_venue_details_never_overwrites_a_known_field_with_none(
     assert updated.venue.address == "170 Boulevard de Magenta"
 
 
+async def _ingest_with_imdb_id(
+    repo: EventRepository, *, imdb_id: str = "tt0055852"
+) -> ScreeningEvent:
+    event = await _ingest(repo, starts_at=_moment())
+    event.film.imdb_id = imdb_id
+    await repo.save_film(event.film)
+    return event
+
+
+async def test_update_film_ratings_inserts_new_ratings(session: AsyncSession) -> None:
+    repo = EventRepository(session)
+    event = await _ingest_with_imdb_id(repo)
+
+    await repo.update_film_ratings(
+        {
+            "tt0055852": [
+                RatingRecord(source=RatingSource.IMDB, rating=7.8, url="https://imdb"),
+                RatingRecord(source=RatingSource.LETTERBOXD, rating=4.2, url=None),
+            ]
+        }
+    )
+
+    ratings = await repo.list_film_ratings(event.film_id)
+    by_source = {rating.source: rating for rating in ratings}
+    assert by_source[RatingSource.IMDB].rating == 7.8
+    assert by_source[RatingSource.IMDB].url == "https://imdb"
+    assert by_source[RatingSource.LETTERBOXD].rating == 4.2
+
+
+async def test_update_film_ratings_refreshes_an_existing_source(
+    session: AsyncSession,
+) -> None:
+    repo = EventRepository(session)
+    event = await _ingest_with_imdb_id(repo)
+    await repo.update_film_ratings(
+        {"tt0055852": [RatingRecord(source=RatingSource.IMDB, rating=7.8)]}
+    )
+
+    await repo.update_film_ratings(
+        {"tt0055852": [RatingRecord(source=RatingSource.IMDB, rating=8.0)]}
+    )
+
+    ratings = await repo.list_film_ratings(event.film_id)
+    assert len(ratings) == 1
+    assert ratings[0].rating == 8.0
+
+
+async def test_update_film_ratings_skips_a_film_not_matched_by_imdb_id(
+    session: AsyncSession,
+) -> None:
+    repo = EventRepository(session)
+    await _ingest(repo, starts_at=_moment())  # no imdb_id set
+
+    # Should not raise, and should create no FilmRating row.
+    await repo.update_film_ratings(
+        {"tt9999999": [RatingRecord(source=RatingSource.IMDB, rating=5.0)]}
+    )
+
+
 async def test_prune_deletes_an_old_ordinary_screening(session: AsyncSession) -> None:
     repo = EventRepository(session)
     old = await _ingest(
@@ -821,3 +887,22 @@ async def test_list_ordinary_screenings_excludes_special_ones(
     ordinary = await repo.list_ordinary_screenings()
 
     assert [event.film.title for event in ordinary] == ["Ordinary"]
+
+
+async def test_list_films_missing_imdb_id_returns_only_tmdb_enriched_gaps(
+    session: AsyncSession,
+) -> None:
+    repo = EventRepository(session)
+    unenriched = await _ingest(repo, title="Unenriched", starts_at=_moment())
+    pre_feature = await _ingest(repo, title="Pre-feature", starts_at=_moment())
+    pre_feature.film.tmdb_id = 42
+    await repo.save_film(pre_feature.film)
+    backfilled = await _ingest(repo, title="Backfilled", starts_at=_moment())
+    backfilled.film.tmdb_id = 43
+    backfilled.film.imdb_id = "tt0000043"
+    await repo.save_film(backfilled.film)
+
+    gaps = await repo.list_films_missing_imdb_id()
+
+    assert [f.title for f in gaps] == ["Pre-feature"]
+    assert unenriched.film.tmdb_id is None  # sanity: never touched by this query

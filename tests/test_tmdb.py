@@ -3,6 +3,9 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
+import pytest
+
 from cine_event_bot.core.models import Film
 from cine_event_bot.io.tmdb import TmdbClient, TmdbEnricher
 
@@ -20,6 +23,8 @@ def _details_payload(**overrides: Any) -> dict[str, Any]:
         "original_title": "Dune: Part Two",
         "overview": "Paul Atreides unites with the Fremen.",
         "poster_path": "/poster.jpg",
+        "backdrop_path": "/backdrop.jpg",
+        "imdb_id": "tt15239678",
         "release_date": "2024-02-27",
         "runtime": 167,
         "vote_average": 8.2,
@@ -52,6 +57,25 @@ def _client(
     return TmdbClient(http, api_key="key"), http
 
 
+def _details_only_client(
+    details: dict[str, Any] | None = None, *, status_error: int | None = None
+) -> tuple[TmdbClient, MagicMock]:
+    response = MagicMock()
+    if status_error is not None:
+        error = httpx.HTTPStatusError(
+            "not found",
+            request=MagicMock(),
+            response=MagicMock(status_code=status_error),
+        )
+        response.raise_for_status = MagicMock(side_effect=error)
+    else:
+        response.json = MagicMock(return_value=details or _details_payload())
+        response.raise_for_status = MagicMock()
+    http = MagicMock()
+    http.get = AsyncMock(return_value=response)
+    return TmdbClient(http, api_key="key"), http
+
+
 async def test_find_maps_search_and_details() -> None:
     client, _ = _client()
 
@@ -66,6 +90,8 @@ async def test_find_maps_search_and_details() -> None:
     assert match.genres == ("Science-Fiction", "Aventure")
     assert match.overview == "Paul Atreides unites with the Fremen."
     assert match.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert match.backdrop_url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
+    assert match.imdb_id == "tt15239678"
     assert match.vote_average == 8.2
 
 
@@ -88,10 +114,38 @@ async def test_find_returns_none_when_no_results() -> None:
     http.get.assert_awaited_once()  # no details call without a match
 
 
+async def test_get_by_id_fetches_details_directly_with_no_search_call() -> None:
+    client, http = _details_only_client()
+
+    match = await client.get_by_id(693134)
+
+    assert match is not None
+    assert match.tmdb_id == 693134
+    assert match.imdb_id == "tt15239678"
+    assert match.backdrop_url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
+    http.get.assert_awaited_once()
+    assert "/movie/693134" in http.get.await_args.args[0]
+
+
+async def test_get_by_id_returns_none_on_a_404() -> None:
+    client, _ = _details_only_client(status_error=404)
+
+    assert await client.get_by_id(999999) is None
+
+
+async def test_get_by_id_reraises_a_non_404_error() -> None:
+    client, _ = _details_only_client(status_error=500)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await client.get_by_id(693134)
+
+
 async def test_find_handles_missing_optional_fields() -> None:
     client, _ = _client(
         details=_details_payload(
             poster_path=None,
+            backdrop_path=None,
+            imdb_id=None,
             release_date="",
             runtime=None,
             vote_average=None,
@@ -106,6 +160,8 @@ async def test_find_handles_missing_optional_fields() -> None:
 
     assert match is not None
     assert match.poster_url is None
+    assert match.backdrop_url is None
+    assert match.imdb_id is None
     assert match.release_year is None
     assert match.runtime_minutes is None
     assert match.vote_average is None
@@ -147,6 +203,8 @@ async def test_enricher_fills_every_film_field() -> None:
     assert film.genres == ["Science-Fiction", "Aventure"]
     assert film.overview == "Paul Atreides unites with the Fremen."
     assert film.poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert film.backdrop_url == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
+    assert film.imdb_id == "tt15239678"
     assert film.vote_average == 8.2
 
 

@@ -9,10 +9,10 @@ import pytest
 from factories import make_sighting
 
 from cine_event_bot.core.dedup import compute_dedup_key
-from cine_event_bot.core.models import EventType, Film, Sighting, Source
+from cine_event_bot.core.models import EventType, Film, RatingSource, Sighting, Source
 from cine_event_bot.core.progress import ProgressReporter
 from cine_event_bot.io.repository import EventRepository
-from cine_event_bot.io.scrapers.base import VenueDetail
+from cine_event_bot.io.scrapers.base import RatingRecord, VenueDetail
 from cine_event_bot.pipeline import IngestionPipeline
 
 _MOMENT = datetime(2026, 6, 25, 18, 30, tzinfo=UTC)
@@ -144,6 +144,35 @@ class _FailingVenueDetailScraper(_FakeScraper):
         raise httpx.ConnectError("boom")
 
 
+class _FilmRatingScraper(_FakeScraper):
+    """A scraper that also implements the optional FilmRatingSource capability."""
+
+    def __init__(
+        self,
+        source: Source,
+        sightings: list[Sighting],
+        ratings: dict[str, list[RatingRecord]],
+    ) -> None:
+        super().__init__(source, sightings)
+        self._ratings = ratings
+
+    async def fetch_film_ratings(
+        self,
+        client: httpx.AsyncClient,  # noqa: ARG002
+    ) -> dict[str, list[RatingRecord]]:
+        return self._ratings
+
+
+class _FailingFilmRatingScraper(_FakeScraper):
+    """A FilmRatingSource-capable scraper whose ratings fetch always fails."""
+
+    async def fetch_film_ratings(
+        self,
+        client: httpx.AsyncClient,  # noqa: ARG002
+    ) -> dict[str, list[RatingRecord]]:
+        raise httpx.ConnectError("boom")
+
+
 class _FailingScraper:
     def __init__(self, source: Source) -> None:
         self._source = source
@@ -185,6 +214,14 @@ class _RepertoryEnricher:
 class _FailingEnricher:
     async def enrich(self, film: Film) -> None:  # noqa: ARG002
         raise httpx.ConnectError("tmdb down")
+
+
+class _ImdbEnricher:
+    """Fills the IMDb id a film-ratings match is keyed on."""
+
+    async def enrich(self, film: Film) -> None:
+        film.tmdb_id = 42
+        film.imdb_id = "tt0055852"
 
 
 class _SameTmdbIdEnricher:
@@ -645,6 +682,60 @@ async def test_run_survives_a_failing_venue_details_fetch(session) -> None:  # n
         )
     ]
     pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
+
+    report = await pipeline.run(MagicMock())
+
+    assert report.events_ingested == 1
+
+
+async def test_run_applies_film_ratings_from_a_film_rating_capable_scraper(
+    session,  # noqa: ANN001
+) -> None:
+    repository = EventRepository(session)
+    scrapers = [
+        _FilmRatingScraper(
+            Source.OFFI,
+            [_ordinary_sighting(Source.OFFI, title="Old Film", url="a")],
+            {"tt0055852": [RatingRecord(source=RatingSource.IMDB, rating=7.8)]},
+        )
+    ]
+    pipeline = IngestionPipeline(scrapers, repository, _ImdbEnricher())
+
+    await pipeline.run(MagicMock())
+    stored = await repository.get_by_dedup_key(
+        compute_dedup_key("Old Film", _ORDINARY_VENUE, _MOMENT)
+    )
+
+    assert stored is not None
+    ratings = await repository.list_film_ratings(stored.film_id)
+    assert len(ratings) == 1
+    assert ratings[0].source is RatingSource.IMDB
+    assert ratings[0].rating == 7.8
+
+
+async def test_run_ignores_scrapers_with_no_film_rating_capability(session) -> None:  # noqa: ANN001
+    repository = EventRepository(session)
+    scrapers = [
+        _FakeScraper(
+            Source.CINEMATHEQUE, [_sighting(Source.CINEMATHEQUE, title="A", url="a")]
+        )
+    ]
+    pipeline = IngestionPipeline(scrapers, repository, _NullEnricher())
+
+    # Should not raise even though no scraper implements FilmRatingSource.
+    report = await pipeline.run(MagicMock())
+
+    assert report.events_ingested == 1
+
+
+async def test_run_survives_a_failing_film_ratings_fetch(session) -> None:  # noqa: ANN001
+    repository = EventRepository(session)
+    scrapers = [
+        _FailingFilmRatingScraper(
+            Source.OFFI, [_ordinary_sighting(Source.OFFI, title="Old Film", url="a")]
+        )
+    ]
+    pipeline = IngestionPipeline(scrapers, repository, _ImdbEnricher())
 
     report = await pipeline.run(MagicMock())
 
