@@ -1,42 +1,76 @@
 # Lanterne
 
-Self-hosted Telegram bot that tracks cinema screenings in Paris/IDF, flags
-**special screenings** — avant-premières (with the film team), ciné-concerts,
-retrospectives, open-air, festivals, cult/midnight screenings, ciné-clubs,
-short-film programmes — from seven scraped sources, enriches them with TMDB
-data, sends a **weekly digest** of the specials, and answers
-**natural-language questions** over every stored screening.
+[![CI](https://github.com/Pierrafrom/lanterne/actions/workflows/ci.yml/badge.svg)](https://github.com/Pierrafrom/lanterne/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Checks](https://img.shields.io/badge/ruff%20%7C%20mypy%20--strict%20%7C%20pytest-passing-brightgreen)](pyproject.toml)
+[![Status](https://img.shields.io/badge/status-active%20development-orange)](#status)
 
-## Features
+A self-hosted Telegram bot that watches Paris/IDF cinema listings for me so I
+don't have to check seven different websites to know when something worth
+seeing is on.
 
-- **Seven active sources**, each scraped at the most robust level (see
-  [scraping strategy](docs/scraping-strategy.md)): Première Projo
-  (structured Next.js JSON, no LLM), La Cinémathèque française,
-  Le Forum des images, the Fondation Jérôme Seydoux-Pathé, and La Villette's
-  open-air cinema (HTML + LLM extraction), Paris Ciné Info (authenticated
-  JSON API, the full Paris intra-muros catalogue — see
-  [ADR 0007](docs/decisions/0007-paris-cine-info.md); requires a personal
-  account, optional), and offi.fr (the Île-de-France suburb complement,
-  tabular HTML, no LLM). MK2, Le Louxor, and Le Champo were retired once
-  confirmed redundant with Paris Ciné Info's own coverage — see
-  [ADR 0011](docs/decisions/0011-retire-mk2-louxor.md) and
-  [ADR 0012](docs/decisions/0012-retire-lechampo.md).
-- **Every screening is stored**, not only special ones — Paris Ciné Info and
-  offi.fr are *width sources* covering every showtime at their venues; a
-  rule-based classifier (`core/specialness.py`) upgrades an ordinary
-  screening when team presence, a cycle name, an institution venue, or the
-  film's age signals it — see [ADR 0008](docs/decisions/0008-drop-allocine-width-source.md)
-  and [ADR 0009](docs/decisions/0009-specialness-rules-only.md). The weekly
-  digest stays specials-only; the Q&A bot searches everything.
-- **Cross-source deduplication** — the same screening on two sources collapses
-  to one, enriched from both.
+## The problem
+
+Paris has an unusually dense repertory-cinema scene — avant-premières with
+the film team, ciné-concerts, festivals, retrospectives, open-air
+screenings, ciné-clubs — but that program is scattered across a dozen venue
+websites with no shared feed or alerting. Finding out that a director is
+doing a Q&A three days from now means either remembering to check every
+site or missing it. Lanterne exists to solve that for myself: it scrapes
+every source once a week, decides on its own which screenings are actually
+worth flagging, and pushes a digest to Telegram — plus lets me just ask it
+things ("is there anything special at La Cinémathèque this week?") instead
+of browsing.
+
+## What it does
+
+- **Seven scraped sources** — Première Projo, La Cinémathèque française, Le
+  Forum des images, the Fondation Jérôme Seydoux-Pathé, La Villette's
+  open-air cinema, Paris Ciné Info (the full Paris intra-muros catalogue,
+  authenticated), and offi.fr (the Île-de-France suburb complement). Each
+  is scraped at the most robust level available for that site — structured
+  JSON/API where one exists, LLM extraction only where it doesn't. Detail
+  and the reasoning behind every source added or dropped is in
+  [docs/scraping-strategy.md](docs/scraping-strategy.md) and
+  [docs/decisions/](docs/decisions/) (ADRs).
+- **Every screening is stored, not just the special ones** — a rule-based
+  classifier (`core/specialness.py`) decides after ingestion whether a
+  showtime qualifies as special (team presence, a named cycle, an
+  institutional venue, the film's age). The weekly digest only surfaces
+  specials; a natural-language Q&A can search everything.
+- **Cross-source deduplication** — the same screening reported by two
+  sources collapses into one record, enriched from both.
 - **TMDB enrichment** — synopsis, poster, director, genres, runtime,
-  release year, and rating, fetched once per film and shared by all its
-  screenings.
+  release year and ratings (IMDb, Allociné, SensCritique, Rotten Tomatoes,
+  Metacritic, Letterboxd where available), fetched once per film and
+  shared across every screening of it.
 - **Weekly digest** in French, grouped by day, in Paris local time.
-- **Natural-language Q&A** — questions are turned into structured filters by the
-  LLM and run against the database (no RAG).
-- **Async end to end** (aiogram, httpx, aiosqlite, Instructor/Ollama).
+- **Natural-language Q&A over Telegram** — a question is turned into a
+  structured database filter by an LLM (Instructor + a local Ollama model),
+  not RAG.
+
+## Status
+
+Actively evolving, not a finished product. The database is mid-migration
+from "special screenings only" to "every screening, specialness detected
+after the fact" — see
+[ADR 0008](docs/decisions/0008-drop-allocine-width-source.md) and
+[docs/coverage-matrix.md](docs/coverage-matrix.md) for where that rollout
+currently stands and which venues are and aren't covered yet. Expect the
+scraper roster and the specialness rules to keep changing as coverage gaps
+get found.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Language | Python 3.11+, `uv` for dependency management |
+| Bot / async runtime | `aiogram`, `httpx`, `asyncio` end to end |
+| Data | `SQLModel` (SQLAlchemy + Pydantic) on SQLite, `alembic` migrations |
+| LLM extraction | `instructor` (structured output) over a local `Ollama` model |
+| Scraping | `httpx` + `BeautifulSoup4`, JSON/API where available |
+| CLI | `Typer` |
+| Quality gate | `ruff`, `mypy --strict`, `pytest`, enforced in CI and pre-commit |
 
 ## Quickstart
 
