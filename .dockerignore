@@ -1,0 +1,35 @@
+# Build context stays the repo root (needed for the shared uv workspace
+# lockfile — see docs/decisions/0015-uv-workspace-monorepo.md), so this file
+# keeps that context lean: version control, dev tooling caches, docs, and
+# anything not actually read by a Dockerfile.
+.git/
+.github/
+
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/htmlcov/
+
+**/node_modules/
+**/.next/
+
+docs/
+*.md
+!README.md
+
+backups/
+logs/*.jsonl
+*.db
+*.db-wal
+*.db-shm
+*.db.bak*
+
+.env
+.env.local
+
+.codegraph/
+.claude/

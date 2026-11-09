@@ -10,14 +10,20 @@ venv/
 *.sqlite
 *.sqlite3
 backups/
-logs/*.jsonl
+# Unanchored (leading **) so this also covers every workspace member's own
+# logs/ directory (e.g. packages/lanterne/logs/), not just the repo root's.
+**/logs/*.jsonl
 !logs/.gitkeep
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .codegraph/
+.impeccable/
 *.egg-info/
 dist/
 build/
 .coverage
 htmlcov/
+
+# Playwright MCP session artifacts
+.playwright-mcp/

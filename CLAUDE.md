@@ -46,7 +46,7 @@ Fully async pipeline from end to end — aiogram event loop drives everything:
 aiogram (event loop)
    ├── httpx.AsyncClient → TMDB API
    ├── Instructor (async) → Ollama → structured event extraction
-   └── SQLModel (async session, aiosqlite) → read/write events
+   └── SQLModel (async session, asyncpg) → read/write events
 
 Weekly cron (Typer CLI, asyncio.run())
    ├── httpx.AsyncClient → scrape every configured source
@@ -57,7 +57,7 @@ Weekly cron (Typer CLI, asyncio.run())
 ## Package structure
 
 ```
-src/lanterne/
+packages/lanterne/src/lanterne/
 ├── main.py              # Typer admin CLI (sync entry point, wraps asyncio.run)
 ├── logging_config.py    # JSONL logger — call get_logger(__name__) everywhere
 ├── core/                # business logic (models, digest, dedup)
@@ -66,7 +66,7 @@ src/lanterne/
 
 ## Key technical decisions
 
-- **Async throughout**: aiogram, httpx, aiosqlite, Instructor async client — do not
+- **Async throughout**: aiogram, httpx, asyncpg, Instructor async client — do not
   introduce sync blocking calls inside async functions.
 - **Instructor over raw LLM calls**: use `instructor.from_openai(AsyncOpenAI(...))` with
   the Ollama-compatible OpenAI endpoint (`/v1`) for structured Pydantic output.
@@ -91,14 +91,31 @@ rule). The **exception** is end-user-facing Telegram text — bot replies
 bot targets a French-speaking Parisian audience. Digest times are shown in
 Paris local time (events are stored in UTC).
 
+## Repository layout
+
+This is a **uv workspace** (see
+[ADR 0015](docs/decisions/0015-uv-workspace-monorepo.md)): `packages/lanterne`
+is the domain package described above; `services/` holds the additional
+services described in [`docs/vision.md`](docs/vision.md). `services/api`
+(FastAPI) and `services/web` (Next.js) exist as hello-world scaffolding
+only — a `/health` check and a status page proving the deployment chain
+works, no business endpoints yet (see
+[ADR 0019](docs/decisions/0019-hello-world-api-web.md)). `services/mobile`
+and `services/observability` are README-only placeholders. One shared
+`uv.lock` at the repo root covers every Python member
+(`packages/lanterne`, `services/api`).
+
 ## Running locally
 
 ```fish
-uv sync --all-groups
+uv sync --all-packages --all-groups   # installs every workspace member into one shared venv
 cp .env.example .env   # fill in the required tokens
-uv run pytest          # run tests
 
-# Admin CLI (Typer) via the `lanterne` entry point — see `--help`
+# Tests run scoped to the lanterne package (its own pytest config/coverage):
+uv run --directory packages/lanterne pytest
+
+# Admin CLI (Typer) via the `lanterne` entry point — see `--help`. Works
+# from any directory: paths are anchored to the package root, not the CWD.
 uv run lanterne scrape          # scrape + enrich + persist (idempotent)
 uv run lanterne stats           # summary of stored events
 uv run lanterne weekly-digest   # broadcast the week's digest

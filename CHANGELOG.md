@@ -24,9 +24,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `paris_cine_info_parsing.py` — the remainder (scraper class plus its
   tightly-coupled showtime/LLM-classification flow) is one cohesive unit
   left as-is. No behavior change.
+- Restructured the repository into a uv workspace: the application moved
+  from `src/lanterne` to `packages/lanterne` (import path unchanged),
+  making room for the additional services described in
+  [`docs/vision.md`](docs/vision.md) (public API, website, mobile,
+  observability — not implemented yet). See
+  [ADR 0015](docs/decisions/0015-uv-workspace-monorepo.md).
+- Migrated the database from SQLite to PostgreSQL: `asyncpg` replaces
+  `aiosqlite`, `JSONB` replaces SQLite's `JSON` columns, every `StrEnum`
+  column stores plain text (`native_enum=False`) rather than a native
+  Postgres `ENUM` so adding a category still needs no migration, and
+  `backup-db` now shells out to `pg_dump` instead of `VACUUM INTO`. The
+  Alembic migration chain was reset to a single clean PostgreSQL baseline
+  — no production Postgres data existed yet to migrate incrementally. See
+  [ADR 0014](docs/decisions/0014-postgres-migration.md).
+- The test suite now runs against a real, ephemeral PostgreSQL container
+  (`testcontainers`) instead of SQLite in-memory, exercising the actual
+  Alembic migration path rather than a metadata-only fast path. Docker is
+  now required to run `pytest`, locally and in CI. See
+  [ADR 0016](docs/decisions/0016-tests-on-postgres.md).
+- `docker-compose.yml` is now a self-contained dev stack: PostgreSQL 18,
+  GPU-accelerated Ollama (verified end to end against an NVIDIA GPU), a
+  one-shot `ollama-pull` service, a long-running `bot` service, and a
+  profile-gated one-shot `scraper` service — no external database or LLM
+  instance required to bring up the whole chain. The `lanterne` image
+  build moved to `docker/lanterne.Dockerfile`. Fixed a real bug surfaced
+  by end-to-end testing: a blank `ADMIN_CHAT_ID=` in `.env` crashed
+  `Settings()` instead of being treated as unset, contradicting
+  `.env.example`'s own documented behavior. See
+  [ADR 0017](docs/decisions/0017-dev-docker-compose-stack.md).
+- Added `scripts/migrate_sqlite_to_postgres.py`: an idempotent, checked
+  migration of the pre-Postgres SQLite database into PostgreSQL (read-only
+  on the SQLite side, `--check` mode verifies row counts and a per-row
+  content hash between source and target). Run once against this
+  project's own SQLite data (808 films, 41,231 screenings, 41,282
+  sightings, 291 venues, 2,443 ratings) — verified clean by both the
+  script's own `--check` and the application reading the migrated data
+  back through `lanterne stats`. See
+  [ADR 0014](docs/decisions/0014-postgres-migration.md)'s "Data
+  migration" section for the design.
+- Added `pgweb` to `docker-compose.yml` as the dockerized PostgreSQL GUI
+  client (read-only by default, `127.0.0.1`-only, port `8082`) — not
+  Outerbase Studio as originally planned: investigated and built end to
+  end (a custom image from Outerbase's own source, pinned to a specific
+  commit, since no official Docker image exists), but its web build
+  explicitly blocks Postgres connections (confirmed by inspecting its own
+  client bundle, not just its docs). See
+  [ADR 0018](docs/decisions/0018-postgres-gui-client-pgweb.md). Also
+  pinned `ollama/ollama` to `0.32.0` (was `:latest`) while touching
+  `docker-compose.yml`.
+- Added `services/api` (FastAPI) and `services/web` (Next.js) as
+  hello-world scaffolding, proving the deployment chain works end to end
+  — `GET /health` on the API pings PostgreSQL via `lanterne.io.db.Database`;
+  the web app's homepage renders that status via a server-side fetch.
+  Both dockerized and wired into `docker-compose.yml`; CI gained a
+  `web-quality` job (biome, `tsc`, `next build`) alongside the existing
+  Python one. `services/mobile` and `services/observability` got
+  placeholder READMEs. No business endpoints or pages — see
+  [ADR 0019](docs/decisions/0019-hello-world-api-web.md).
+- Added `docker-compose.prod.yml`, a Compose overlay (Caddy reverse proxy,
+  automatic HTTPS, path-routes `/api/*` to `api` and everything else to
+  `web`) applied on top of `docker-compose.yml`, never standalone. Clears
+  every other service's dev-only host port with the `!reset []` merge
+  tag — Compose concatenates list fields like `ports` across `-f` files by
+  default, so a naive override would have left them exposed. The
+  routing/TLS logic was verified against real running containers
+  (`CADDY_DOMAIN=localhost`); a real deployment (public domain, actual
+  Let's Encrypt issuance) was not, since no prod server exists yet. See
+  [ADR 0020](docs/decisions/0020-prod-compose-overlay.md).
 
 ### Added
 
+- Official CNC venue referential, phase 1 (see
+  [ADR 0026](docs/decisions/0026-official-reference-data-layer.md)): a new
+  `io/reference/` layer loads the CNC's active-establishments census and
+  its Île-de-France complement, matches each against stored venues, and
+  enriches a matched `Venue` with `cnc_id`, `insee_code`, `screen_count`,
+  `seat_count`, `art_et_essai*`, `is_multiplex`, and `is_active` — never
+  overwriting an already-known field, never creating a new `Venue` from
+  official data alone. A match is only ever applied automatically when
+  name, département, and geocoded distance all agree; everything else is
+  logged for manual review via the new `sync-reference` CLI command
+  (`--dry-run` available).
 - Async ingestion pipeline: scrape → structure → TMDB-enrich → deduplicate →
   persist (SQLite via aiosqlite), idempotent across re-runs.
 - Nine source scrapers behind a `SourceScraper` protocol (MK2, Le Louxor,
@@ -219,3 +298,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `event_type`/`cycle_name`/`has_team_present`, but its own date arithmetic
   is never trusted, the same "known-true facts win" posture already proven
   in `paris_cine_info.py`.
+- Every `Venue` row missing an address (5 rows, confirmed live 2026-07-20)
+  turned out to be a fragment of an already fully-enriched row, not a
+  genuinely address-less venue: a stale pre-`known_venue`-fix Cinémathèque
+  scrape, and four Paris Ciné Info showtimes whose `title` field carries an
+  in-house ciné-club/bar name instead of the physical cinema (confirmed
+  live: no `tid` is present for these, so `VenueRepository.resolve` can't
+  match them by external id — see
+  `test_missing_tid_leaves_venue_external_id_none`). The same audit found
+  two more fragments by exact address/coordinate collision (`Luxy`/`Le Luxy`, `Écoles Cinéma Club`/`Ecoles Cinema Club`) and one venue carrying
+  its sister venue's address outright (`Cinoches Desnos` had `Cinoches RN7`'s address — Grand Paris Sud operates both under one brand but they
+  are two separate buildings ~1km apart). All eight fragments merged and
+  both addresses corrected by
+  `scripts/fix_venue_missing_address_fragmentation.py`;
+  `core/dedup.py`'s `_VENUE_ALIASES` gained six new entries so the
+  single-venue cases can't refragment — "Lost in Frenchlation", which
+  rotates across at least five different Paris cinemas, was deliberately
+  left unaliased instead of hardcoded to the one venue this fix observed.
+- 7 of the 8 `needs_review` (`NAME_SEARCH`-geocoded) venues' addresses were
+  wrong, in several cases in the wrong department entirely (confirmed live
+  2026-07-21: "L'Étoile" guessed at Paris's Place Charles de Gaulle is
+  actually in La Courneuve; "Rex" guessed inside Disneyland Paris is
+  actually in Châtenay-Malabry) — each is `OFFI`-sourced, and each venue's
+  own offi.fr page carries a real, addressed `schema.org/PostalAddress`
+  block the scraper doesn't parse today. Corrected via
+  `scripts/fix_needs_review_venue_addresses.py`. A full walk of offi.fr's
+  7-department venue directory (166 listed venues) also found 4 real
+  cinemas with no `Venue` row at all, plus one ("Les Yeux d'Elsa",
+  Saint-Cyr-l'École) confirmed real but currently absent from offi.fr's own
+  directory (likely dropped during a closure) — all 5 added as bare rows
+  (no scraper coverage yet) via `scripts/add_missing_idf_venues.py`. See
+  `docs/coverage-matrix.md`'s 2026-07-21 entry for the full audit and its
+  one open caveat (offi.fr's directory is not a guaranteed-exhaustive IDF
+  census).
+- The 8th `needs_review` venue ("La Grange") turned out to be a real
+  architecture gap, not a one-off bad address: the CNC registry confirms
+  **three** distinct "La Grange" cinemas in Île-de-France (Roissy-en-Brie,
+  Vaux-le-Pénil, and Bois-d'Arcy — officially "La Grange de la Tremblaye",
+  which avoids the collision on its own), and offi.fr's own venue pages
+  render at least two of them under the exact same plain text "La Grange".
+  Unlike Paris Ciné Info, `offi.py` carried no per-venue external id, so
+  `VenueRepository.resolve`'s name-based `slug` matching silently conflated
+  whichever of them reported a showtime into one `Venue` row (id 139) —
+  with a real risk of one venue's screening being dropped as a false
+  duplicate of the other's at a coincidentally identical time. Fixed
+  durably: every `offi.py` sighting now carries the venue page's own URL
+  slug as `venue_external_id` (new `Venue.offi_slug` column, migration
+  `f98fb56722e4`), and `resolve` gained a `source` parameter so it knows
+  which of `Venue`'s per-source external-id columns to check — a name
+  match whose already-claimed external id *differs* from the incoming one
+  is no longer trusted, and a new, disambiguated row is created instead
+  (see `test_ingest_does_not_conflate_two_homonym_venues`). The three real
+  "La Grange" cinemas were added as separate rows, two pre-stamped with
+  their known `offi_slug` so the next `scrape` run routes to them directly,
+  via `scripts/add_disambiguated_la_grange_venues.py`; the old conflated
+  row (id 139) is left alone deliberately — it only holds ordinary
+  width-source screenings, which age out on their own via `prune-db`'s
+  14-day retention.

@@ -1,10 +1,186 @@
+# Dev stack: PostgreSQL, Ollama (GPU-accelerated), and the lanterne image
+# (scraper + bot). No reverse proxy here — each service is reachable
+# directly on its own port; see docs/vision.md for the prod shape.
+#
+# Quickstart:
+#   docker compose up postgres ollama ollama-pull   # infra first
+#   docker compose up pgweb                          # optional: DB browser at :8082
+#   docker compose up bot                            # long-running Telegram bot
+#   docker compose run --rm scraper                  # one-shot scrape
+#   docker compose run --rm scraper lanterne stats    # any other admin command
+
 services:
+  postgres:
+    # PostGIS build of the official image (same PG18 base, PostGIS 3.6
+    # pre-installed) — see docs/decisions/0022-postgres-extensions.md.
+    image: postgis/postgis:18-3.6
+    # pg_stat_statements must be loaded at server start (it hooks into the
+    # planner/executor) — CREATE EXTENSION alone is not enough. The library
+    # itself ships in the standard image's contrib set already; this only
+    # turns it on. See docs/decisions/0022-postgres-extensions.md.
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lanterne}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lanterne}
+      POSTGRES_DB: ${POSTGRES_DB:-lanterne}
+    # postgres:18+ images store data under version-specific subdirectories
+    # of /var/lib/postgresql (pg_ctlcluster-compatible layout) — mount the
+    # parent directory, not /var/lib/postgresql/data as with older images
+    # (see github.com/docker-library/postgres/pull/1259).
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    # Bound to loopback only — reachable from the host (psql, a GUI client)
+    # but not from the network; other services reach it via the "postgres"
+    # hostname on the compose-internal network instead. Host port defaults
+    # to 5433, not Postgres's standard 5432, to avoid colliding with a
+    # locally-run or another project's Postgres instance — override with
+    # POSTGRES_HOST_PORT if 5433 is taken too.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lanterne}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.32.0
+    volumes:
+      - ollama_data:/root/.ollama
+    # Host port defaults to 11435, not Ollama's standard 11434, to avoid
+    # colliding with a locally-run Ollama instance — override with
+    # OLLAMA_HOST_PORT if needed. Containers on the compose network still
+    # reach this service on its standard port via the "ollama" hostname.
+    ports:
+      - "127.0.0.1:${OLLAMA_HOST_PORT:-11435}:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # One-shot: pulls OLLAMA_MODEL into the ollama service's own volume, then
+  # exits. Talks to `ollama` over the network (OLLAMA_HOST) — the model is
+  # stored server-side, not in this container, so no volume mount is needed
+  # here. Re-run any time with `docker compose run --rm ollama-pull`; a
+  # model that's already present is a fast no-op.
+  ollama-pull:
+    image: ollama/ollama:0.32.0
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-qwen2.5:7b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # Dockerized PostgreSQL GUI client — read-only, not exposed publicly. See
+  # docs/decisions/0018-outerbase-studio-custom-image.md for why this is
+  # pgweb rather than the originally-requested Outerbase Studio (whose web
+  # build explicitly blocks Postgres connections — confirmed empirically,
+  # not just documented).
+  pgweb:
+    image: sosedoff/pgweb:0.17.0
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lanterne}:${POSTGRES_PASSWORD:-lanterne}@postgres:5432/${POSTGRES_DB:-lanterne}?sslmode=disable
+    command: ["--readonly"]
+    # Bound to loopback only, never 0.0.0.0 — see the postgres service's own
+    # comment on host-port defaults.
+    ports:
+      - "127.0.0.1:${PGWEB_HOST_PORT:-8082}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/lanterne.Dockerfile
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lanterne}:${POSTGRES_PASSWORD:-lanterne}@postgres:5432/${POSTGRES_DB:-lanterne}
+      OLLAMA_BASE_URL: http://ollama:11434
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    command: ["lanterne", "run-bot"]
     volumes:
       - ./logs:/app/logs
-    environment:
-      - LOG_LEVEL=INFO
+      - ./backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
+
+  # Not started by a plain `docker compose up` (profile-gated) — scraping is
+  # a one-off/cron-triggered action, not a long-running daemon. Run with
+  # `docker compose run --rm scraper` (default: `lanterne scrape`) or
+  # override the command for any other admin CLI call.
+  scraper:
+    build:
+      context: .
+      dockerfile: docker/lanterne.Dockerfile
+    profiles: ["scraper"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lanterne}:${POSTGRES_PASSWORD:-lanterne}@postgres:5432/${POSTGRES_DB:-lanterne}
+      OLLAMA_BASE_URL: http://ollama:11434
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    command: ["lanterne", "scrape"]
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # Hello-world scaffolding only (docs/vision.md) — no business endpoints.
+  # Validates the deployment chain: api ↔ postgres, web ↔ api.
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lanterne}:${POSTGRES_PASSWORD:-lanterne}@postgres:5432/${POSTGRES_DB:-lanterne}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8001}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: services/web
+      dockerfile: ../../docker/web.Dockerfile
+    environment:
+      # Internal service-to-service URL (server-side fetch in a Server
+      # Component, see app/page.tsx) — not the host-published API_HOST_PORT.
+      API_URL: http://api:8000
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3000}:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ollama_data:

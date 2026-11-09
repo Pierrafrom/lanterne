@@ -66,7 +66,7 @@ get found.
 |---|---|
 | Language | Python 3.11+, `uv` for dependency management |
 | Bot / async runtime | `aiogram`, `httpx`, `asyncio` end to end |
-| Data | `SQLModel` (SQLAlchemy + Pydantic) on SQLite, `alembic` migrations |
+| Data | `SQLModel` (SQLAlchemy + Pydantic) on PostgreSQL (`asyncpg`), `alembic` migrations |
 | LLM extraction | `instructor` (structured output) over a local `Ollama` model |
 | Scraping | `httpx` + `BeautifulSoup4`, JSON/API where available |
 | CLI | `Typer` |
@@ -77,7 +77,7 @@ get found.
 ```fish
 git clone https://github.com/Pierrafrom/lanterne
 cd lanterne
-uv sync --all-groups
+uv sync --all-packages --all-groups
 cp .env.example .env   # fill TELEGRAM_BOT_TOKEN, TMDB_API_KEY, OLLAMA_BASE_URL, OLLAMA_MODEL
 
 uv run lanterne scrape          # scrape + enrich + persist (idempotent)
@@ -94,14 +94,21 @@ Full instructions (prerequisites, Ollama model, Docker, observability) in
 ## Test
 
 ```fish
-uv run pytest
+uv run --directory packages/lanterne pytest
 ```
 
 See [docs/testing.md](docs/testing.md) for conventions and the no-network
 testing approach.
 
+This is a uv workspace (`packages/lanterne` is the bot/scraper above;
+`services/api` and `services/web` are hello-world scaffolding for the
+public API and website described in [docs/vision.md](docs/vision.md) — see
+[docs/setup.md](docs/setup.md)'s *Docker* section for running the full
+stack).
+
 ## Documentation
 
+- [docs/vision.md](docs/vision.md) — target stack beyond the bot/scraper
 - [docs/architecture.md](docs/architecture.md) — components, async flow, diagrams
 - [docs/setup.md](docs/setup.md) — install, configure, run, Docker
 - [docs/testing.md](docs/testing.md) — how to run and write tests

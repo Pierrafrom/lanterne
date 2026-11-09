@@ -1,0 +1,446 @@
+"""Tests for the admin CLI entry point and logging infrastructure."""
+
+import json
+import logging
+import time
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+from factories import make_sighting
+from geoalchemy2 import WKTElement
+from typer.testing import CliRunner
+
+import lanterne.main as main_module
+from lanterne.config import Settings
+from lanterne.core.evaluation import EvaluationSummary
+from lanterne.core.models import Film, RatingSource
+from lanterne.core.report import IngestionReport, SourceOutcome
+from lanterne.core.stats import EventStats
+from lanterne.io.reference.models import OfficialEstablishment
+from lanterne.io.repository import EventRepository
+from lanterne.io.scrapers.base import RatingRecord
+from lanterne.io.scrapers.paris_cine_info import ParisCineInfoScraper
+from lanterne.io.tmdb import MovieMatch
+from lanterne.logging_config import JsonlFormatter, get_logger
+from lanterne.main import app, get_greeting
+
+
+def test_get_greeting_contains_bot_name() -> None:
+    result = get_greeting()
+    assert "Lanterne" in result
+
+
+def test_get_greeting_returns_non_empty_str() -> None:
+    assert len(get_greeting()) > 0
+
+
+def test_greet_command_outputs_greeting() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["greet"])
+    assert result.exit_code == 0
+    assert "Lanterne" in result.output
+
+
+def test_scrape_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_run() -> IngestionReport:
+        return IngestionReport(
+            outcomes=(
+                SourceOutcome(source="premiereprojo.fr", events=3),
+                SourceOutcome(source="cinematheque.fr", events=None),
+            )
+        )
+
+    monkeypatch.setattr("lanterne.main._run_ingestion", fake_run)
+    result = CliRunner().invoke(app, ["scrape"])
+
+    assert result.exit_code == 0
+    assert "3 event(s)" in result.output
+    assert "1 source(s) failed" in result.output
+
+
+def test_stats_command_prints_total(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_stats() -> EventStats:
+        return EventStats(total=169, by_source={"premiereprojo.fr": 169})
+
+    monkeypatch.setattr("lanterne.main._load_stats", fake_stats)
+    result = CliRunner().invoke(app, ["stats"])
+
+    assert result.exit_code == 0
+    assert "169" in result.output
+
+
+def test_eval_specialness_command_scores_the_golden_dataset() -> None:
+    # No mocking needed: the classifier and dataset are pure, in-memory data.
+    result = CliRunner().invoke(app, ["eval-specialness"])
+
+    assert result.exit_code == 0
+    assert "Accuracy" in result.output
+
+
+def test_prune_db_command_reports_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_prune() -> int:
+        return 42
+
+    monkeypatch.setattr("lanterne.main._prune_db", fake_prune)
+    result = CliRunner().invoke(app, ["prune-db"])
+
+    assert result.exit_code == 0
+    assert "42" in result.output
+
+
+def test_eval_extraction_command_scores_the_golden_dataset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_evaluation(
+        settings: Settings,  # noqa: ARG001
+        dataset: object,  # noqa: ARG001
+    ) -> EvaluationSummary:
+        return EvaluationSummary(
+            total_cases=1,
+            failures=0,
+            exact_match_rate=1.0,
+            field_accuracy={"title": 1.0},
+            mean_latency_seconds=0.1,
+            results=[],
+        )
+
+    monkeypatch.setattr("lanterne.main._run_evaluation", fake_run_evaluation)
+    # eval_extraction builds Settings() directly in the command body (before
+    # delegating to the monkeypatched _run_evaluation), so the required
+    # fields must come from the environment, not an ambient .env file.
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("TMDB_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("OLLAMA_MODEL", "test-model")
+    result = CliRunner().invoke(app, ["eval-extraction"])
+
+    assert result.exit_code == 0
+    assert "Exact matches" in result.output
+
+
+def test_backup_db_command_reports_target_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_backup(output_dir: Path) -> Path:  # noqa: ARG001
+        return Path("backups/lanterne-20260101-000000.db")
+
+    monkeypatch.setattr("lanterne.main._backup_db", fake_backup)
+    result = CliRunner().invoke(app, ["backup-db"])
+
+    assert result.exit_code == 0
+    assert "lanterne-20260101-000000.db" in result.output
+
+
+def test_weekly_digest_command_reports_sent_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_weekly_digest() -> int:
+        return 5
+
+    monkeypatch.setattr("lanterne.main._run_weekly_digest", fake_run_weekly_digest)
+    result = CliRunner().invoke(app, ["weekly-digest"])
+
+    assert result.exit_code == 0
+    assert "5" in result.output
+
+
+def test_run_bot_command_wires_and_starts_the_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    async def fake_run_bot() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("lanterne.main._run_bot", fake_run_bot)
+    result = CliRunner().invoke(app, ["run-bot"])
+
+    assert result.exit_code == 0
+    assert called is True
+
+
+def test_backfill_ratings_command_reports_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_backfill() -> int:
+        return 7
+
+    monkeypatch.setattr("lanterne.main._run_backfill_ratings", fake_backfill)
+    result = CliRunner().invoke(app, ["backfill-ratings"])
+
+    assert result.exit_code == 0
+    assert "7" in result.output
+
+
+async def test_backfill_tmdb_fields_updates_films_missing_imdb_id(
+    session,  # noqa: ANN001
+) -> None:
+    repo = EventRepository(session)
+    session.add(Film(title_key="dune", title="Dune", tmdb_id=42))
+    await session.commit()
+
+    class _FakeTmdbClient:
+        async def get_by_id(self, tmdb_id: int) -> MovieMatch:
+            return MovieMatch(
+                tmdb_id=tmdb_id,
+                imdb_id="tt0000042",
+                original_title=None,
+                director=None,
+                release_year=None,
+                runtime_minutes=None,
+                genres=None,
+                overview=None,
+                poster_url=None,
+                backdrop_url="https://image.tmdb.org/t/p/w1280/b.jpg",
+                vote_average=None,
+            )
+
+    updated = await main_module._backfill_tmdb_fields(repo, _FakeTmdbClient())
+
+    assert updated == 1
+    assert await repo.list_films_missing_imdb_id() == []
+
+
+async def test_backfill_tmdb_fields_skips_a_film_tmdb_no_longer_has(
+    session,  # noqa: ANN001
+) -> None:
+    repo = EventRepository(session)
+    session.add(Film(title_key="dune", title="Dune", tmdb_id=42))
+    await session.commit()
+
+    class _NotFoundTmdbClient:
+        async def get_by_id(self, tmdb_id: int) -> None:  # noqa: ARG002
+            return None
+
+    updated = await main_module._backfill_tmdb_fields(repo, _NotFoundTmdbClient())
+
+    assert updated == 0
+
+
+async def test_backfill_film_ratings_skips_when_not_configured(
+    session,  # noqa: ANN001
+) -> None:
+    settings = Settings(
+        telegram_bot_token="t",
+        tmdb_api_key="k",
+        ollama_base_url="http://localhost",
+        ollama_model="m",
+        # Explicit None: overrides any PARIS_CINE_INFO_* set in the real
+        # .env this test suite otherwise inherits.
+        paris_cine_info_login=None,
+        paris_cine_info_password=None,
+    )
+    repo = EventRepository(session)
+
+    # Should not raise, and should not attempt to build an extractor/scraper.
+    await main_module._backfill_film_ratings(settings, repo, client=MagicMock())
+
+
+async def test_backfill_film_ratings_applies_ratings_when_configured(
+    session,  # noqa: ANN001
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        telegram_bot_token="t",
+        tmdb_api_key="k",
+        ollama_base_url="http://localhost",
+        ollama_model="m",
+        paris_cine_info_login="user@example.test",
+        paris_cine_info_password="secret",
+    )
+    repo = EventRepository(session)
+    applied: dict[str, list[RatingRecord]] = {}
+
+    async def fake_fetch_film_ratings(
+        self: ParisCineInfoScraper,  # noqa: ARG001
+        client: object,  # noqa: ARG001
+    ) -> dict[str, list[RatingRecord]]:
+        return {"tt0000001": [RatingRecord(source=RatingSource.IMDB, rating=7.0)]}
+
+    async def fake_update_film_ratings(
+        self: EventRepository,  # noqa: ARG001
+        ratings: dict[str, list[RatingRecord]],
+    ) -> None:
+        applied.update(ratings)
+
+    monkeypatch.setattr(
+        ParisCineInfoScraper, "fetch_film_ratings", fake_fetch_film_ratings
+    )
+    monkeypatch.setattr(
+        EventRepository, "update_film_ratings", fake_update_film_ratings
+    )
+    monkeypatch.setattr(
+        main_module,
+        "build_extractor",
+        lambda settings: MagicMock(),  # noqa: ARG005
+    )
+
+    await main_module._backfill_film_ratings(settings, repo, client=MagicMock())
+
+    assert "tt0000001" in applied
+
+
+def _establishment(**overrides: object) -> OfficialEstablishment:
+    defaults: dict[str, object] = {
+        "cnc_id": "311",
+        "name": "Grand Rex",
+        "dep": "75",
+        "insee_code": "75102",
+        "commune": "Paris 2e Arrondissement",
+        "address": "1 Boulevard Poissonnière",
+        "screen_count": 7,
+        "seat_count": 3678,
+        "art_et_essai": False,
+        "art_et_essai_grade": None,
+        "art_et_essai_labels": None,
+        "is_multiplex": True,
+        "latitude": 48.8708,
+        "longitude": 2.3489,
+    }
+    defaults.update(overrides)
+    return OfficialEstablishment(**defaults)  # type: ignore[arg-type]
+
+
+def test_sync_reference_command_reports_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_run(*, dry_run: bool) -> main_module.ReferenceSyncOutcome:  # noqa: ARG001
+        return main_module.ReferenceSyncOutcome(
+            loaded=500, auto_matched=3, candidates=()
+        )
+
+    monkeypatch.setattr("lanterne.main._run_sync_reference", fake_run)
+    result = CliRunner().invoke(app, ["sync-reference"])
+
+    assert result.exit_code == 0
+    assert "500" in result.output
+    assert "3" in result.output
+
+
+async def test_sync_reference_applies_automatic_matches(
+    session,  # noqa: ANN001
+) -> None:
+    repo = EventRepository(session)
+    event = await repo.ingest(make_sighting(venue="Le Grand Rex"))
+    event.venue.location = WKTElement("POINT(2.3489 48.8708)", srid=4326)
+    event.venue.address = "1 Boulevard Poissonnière, 75002 Paris"
+    await repo.save_venue(event.venue)
+
+    outcome = await main_module._sync_reference(repo, [_establishment()], dry_run=False)
+
+    assert outcome.auto_matched == 1
+    assert outcome.candidates == ()
+    matched = await repo.find_venue_by_cnc_id("311")
+    assert matched is not None
+    assert matched.id == event.venue.id
+
+
+async def test_sync_reference_dry_run_does_not_persist(
+    session,  # noqa: ANN001
+) -> None:
+    repo = EventRepository(session)
+    event = await repo.ingest(make_sighting(venue="Le Grand Rex"))
+    event.venue.location = WKTElement("POINT(2.3489 48.8708)", srid=4326)
+    event.venue.address = "1 Boulevard Poissonnière, 75002 Paris"
+    await repo.save_venue(event.venue)
+
+    outcome = await main_module._sync_reference(repo, [_establishment()], dry_run=True)
+
+    assert outcome.auto_matched == 1
+    assert await repo.find_venue_by_cnc_id("311") is None
+
+
+async def test_sync_reference_logs_and_reports_a_non_automatic_candidate(
+    session,  # noqa: ANN001
+) -> None:
+    repo = EventRepository(session)
+    event = await repo.ingest(make_sighting(venue="Le Grand Rex"))
+    # No address at all: department_match fails, so this is never automatic.
+    event.venue.location = WKTElement("POINT(2.3489 48.8708)", srid=4326)
+    await repo.save_venue(event.venue)
+
+    outcome = await main_module._sync_reference(repo, [_establishment()], dry_run=False)
+
+    assert outcome.auto_matched == 0
+    assert len(outcome.candidates) == 1
+    assert outcome.candidates[0].venue.id == event.venue.id
+    assert await repo.find_venue_by_cnc_id("311") is None
+
+
+def test_reset_db_command_runs_with_yes(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = False
+
+    async def fake_reset() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("lanterne.main._reset_db", fake_reset)
+    result = CliRunner().invoke(app, ["reset-db", "--yes"])
+
+    assert result.exit_code == 0
+    assert called is True
+    assert "reset" in result.output.lower()
+
+
+def test_reset_db_command_aborts_without_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_reset() -> None:
+        raise AssertionError("reset must not run when declined")
+
+    monkeypatch.setattr("lanterne.main._reset_db", fail_reset)
+    result = CliRunner().invoke(app, ["reset-db"], input="n\n")
+
+    assert "Aborted" in result.output
+
+
+def test_get_logger_returns_logger() -> None:
+    logger = get_logger("test.module")
+    assert isinstance(logger, logging.Logger)
+
+
+def test_get_logger_idempotent() -> None:
+    logger1 = get_logger("test.idempotent")
+    logger2 = get_logger("test.idempotent")
+    assert logger1 is logger2
+
+
+def test_logger_emits_without_error() -> None:
+    unique = f"test.emit.{time.monotonic_ns()}"
+    logger = get_logger(unique)
+    logger.info("scaffold smoke test", extra={"ctx": {"stage": "init"}})
+
+
+def test_jsonl_formatter_includes_exception_traceback() -> None:
+    record = logging.LogRecord(
+        name="test.exc",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="boom",
+        args=(),
+        exc_info=None,
+    )
+    try:
+        raise ValueError("kaboom")
+    except ValueError:
+        import sys
+
+        record.exc_info = sys.exc_info()
+    payload = json.loads(JsonlFormatter().format(record))
+
+    assert payload["msg"] == "boom"
+    assert "kaboom" in payload["exc"]
+
+
+def test_jsonl_formatter_omits_exc_without_exception() -> None:
+    record = logging.LogRecord(
+        name="test.noexc",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="ok",
+        args=(),
+        exc_info=None,
+    )
+    payload = json.loads(JsonlFormatter().format(record))
+
+    assert "exc" not in payload

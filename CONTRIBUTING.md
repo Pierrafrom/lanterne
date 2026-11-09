@@ -7,7 +7,7 @@ see [docs/setup.md](docs/setup.md) for full install/configuration and
 ## Getting set up
 
 ```fish
-uv sync --all-groups        # install runtime + dev dependencies
+uv sync --all-packages --all-groups        # install runtime + dev dependencies
 uv run pre-commit install   # enable the commit-time lint/format/type gate
 cp .env.example .env         # fill in the tokens (never commit .env)
 ```
@@ -19,10 +19,10 @@ to check before pushing. All must be clean (zero warnings, not just zero
 errors):
 
 ```fish
-uv run ruff check .    # lint
-uv run ruff format .   # formatting
-uv run mypy src        # strict type checking
-uv run pytest          # tests + coverage (fails under 80%)
+uv run ruff check .                                  # lint
+uv run ruff format .                                 # formatting
+uv run mypy packages/lanterne/src                    # strict type checking
+uv run --directory packages/lanterne pytest          # tests + coverage (fails under 80%)
 ```
 
 New behaviour ships with tests (TDD) and updated docs in the same change — a

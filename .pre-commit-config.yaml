@@ -15,13 +15,26 @@ repos:
       - id: mdformat
         additional_dependencies: [mdformat-gfm]
 
-  # Local hook: runs mypy in the project's real synced environment via `uv run`
-  # rather than pre-commit's isolated venv (which misses third-party type stubs).
+  # Local hooks: run mypy/biome in the project's real synced environment
+  # rather than pre-commit's isolated venv (which misses third-party type
+  # stubs and skips the JS toolchain entirely).
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
-        entry: uv run mypy src
+      - id: mypy-lanterne
+        name: mypy (lanterne)
+        entry: uv run mypy packages/lanterne/src
         language: system
         pass_filenames: false
         types: [python]
+      - id: mypy-api
+        name: mypy (api)
+        entry: uv run mypy services/api/src
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: biome-web
+        name: biome (web)
+        entry: bash -c 'cd services/web && pnpm run lint'
+        language: system
+        pass_filenames: false
+        files: ^services/web/

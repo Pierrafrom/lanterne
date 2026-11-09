@@ -13,7 +13,7 @@ Personal project — solo developer, self-hosted.
 - **Bot framework**: aiogram 3.x — async, event-loop driven
 - **HTTP client**: httpx with HTTP/2 — use `AsyncClient`, never `requests`
 - **HTML parsing**: beautifulsoup4 — for scraping cinema sources
-- **Database**: SQLModel (SQLAlchemy 2 + Pydantic) + aiosqlite — async sessions only
+- **Database**: SQLModel (SQLAlchemy 2 + Pydantic) + asyncpg — async sessions only
 - **LLM extraction**: Instructor 1.x with an Ollama-compatible OpenAI endpoint
 - **Config**: pydantic-settings — env vars only, never hardcoded values
 - **CLI**: Typer — admin commands; intentionally sync, wraps `asyncio.run()`
@@ -27,7 +27,7 @@ The aiogram event loop is the runtime root. Every I/O operation must be async.
 aiogram (event loop)
    ├── httpx.AsyncClient → TMDB API
    ├── Instructor (async) → Ollama → structured event extraction
-   └── SQLModel (async session, aiosqlite) → read/write events
+   └── SQLModel (async session, asyncpg) → read/write events
 
 Weekly cron (Typer CLI → asyncio.run())
    ├── httpx.AsyncClient → scrape 4 sources
@@ -42,7 +42,7 @@ no sync SQLAlchemy sessions, no `time.sleep()` in async context. Use `asyncio.sl
 ## Package layout
 
 ```
-src/lanterne/
+packages/lanterne/src/lanterne/
 ├── main.py              # Typer admin CLI — sync entry point, calls asyncio.run()
 ├── logging_config.py    # JSONL structured logger — import get_logger(__name__) everywhere
 ├── core/                # pure business logic: domain models, digest builder, dedup

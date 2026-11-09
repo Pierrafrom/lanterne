@@ -1,0 +1,16 @@
+# Reverse proxy for the prod overlay (docker-compose.prod.yml) — TLS
+# termination and routing only, never used in dev (see that file's own
+# header comment). Structure only, not exercised against a real domain.
+#
+# Base: caddyserver.com/docs/caddyfile/concepts (env var substitution) and
+# caddyserver.com/docs/caddyfile/patterns (path-based reverse proxy).
+
+{$CADDY_DOMAIN:localhost} {
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

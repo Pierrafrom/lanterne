@@ -1,0 +1,34 @@
+[project]
+name = "lanterne-api"
+version = "0.1.0"
+description = "Public API for Lanterne — hello-world scaffolding only, see docs/vision.md."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.128.0",
+    "lanterne",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[tool.uv.sources]
+lanterne = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/api"]
+
+# ---- Ruff: extends the workspace root's shared baseline (see
+# rules/common/config-standards.md — extend, never duplicate). ----
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "ANN"]
+"__init__.py" = ["D104"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=src --cov-report=term-missing --cov-fail-under=80"

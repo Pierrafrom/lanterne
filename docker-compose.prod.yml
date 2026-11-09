@@ -1,0 +1,62 @@
+# Production overlay — see docs/decisions/0020-prod-compose-overlay.md.
+# The routing/TLS structure below was verified locally (CADDY_DOMAIN=localhost
+# — Caddy's automatic local cert, path-based routing to api/web both
+# confirmed reachable over HTTPS), but NOT against a real public domain or
+# server (no prod deployment exists yet; see docs/vision.md — Let's
+# Encrypt's real ACME flow needs a publicly resolvable domain to verify).
+# Apply on top of the base file, never standalone:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What changes vs. dev:
+#   - Caddy fronts `web` and `api` on 80/443 with automatic HTTPS (Let's
+#     Encrypt) — the only service reachable from outside the host.
+#   - Every other service's dev-only host-port publish (postgres, ollama,
+#     pgweb, api, web) is cleared with `!reset []` — Compose concatenates
+#     list fields like `ports` across -f files by default, so simply
+#     omitting `ports:` here would NOT remove the base file's bindings
+#     (docs.docker.com/reference/compose-file/merge/). Internal services
+#     stay reachable only via the compose network / Caddy.
+#
+# Before an actual deployment: set CADDY_DOMAIN, review secrets management
+# (docker-compose.yml's env_file/.env pattern is a dev convenience, not a
+# production secrets story), and decide whether pgweb belongs in a
+# production stack at all (an SSH tunnel to the loopback-bound `postgres`
+# service, per docker-compose.yml's own port comments, is arguably safer
+# than routing a DB GUI through the public reverse proxy).
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:?set CADDY_DOMAIN before deploying}
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+  postgres:
+    ports: !reset []
+
+  ollama:
+    ports: !reset []
+
+  pgweb:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+
+  web:
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:

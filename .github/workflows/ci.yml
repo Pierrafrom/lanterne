@@ -1,5 +1,6 @@
-# Mirrors the local quality gate: ruff + mypy + pytest — same tools as
-# .pre-commit-config.yaml, so CI never disagrees with what a local commit enforced.
+# Mirrors the local quality gate: ruff + mypy + pytest (Python), biome +
+# tsc + build (web) — same tools as .pre-commit-config.yaml, so CI never
+# disagrees with what a local commit enforced.
 name: CI
 
 on:
@@ -8,7 +9,7 @@ on:
     branches: [main]
 
 jobs:
-  quality:
+  python-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,7 +19,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-groups
+        run: uv sync --all-packages --all-groups
 
       - name: Lint (ruff)
         run: uv run ruff check .
@@ -26,8 +27,44 @@ jobs:
       - name: Format check (ruff)
         run: uv run ruff format --check .
 
-      - name: Type check (mypy --strict)
-        run: uv run mypy src
+      - name: Type check lanterne (mypy --strict)
+        run: uv run mypy packages/lanterne/src
 
-      - name: Tests
-        run: uv run pytest
+      - name: Type check api (mypy --strict)
+        run: uv run mypy services/api/src
+
+      - name: Tests — lanterne (real PostgreSQL via testcontainers)
+        run: uv run --directory packages/lanterne pytest
+
+      - name: Tests — api
+        run: uv run --directory services/api pytest
+
+  web-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: services/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint + format check (biome)
+        run: pnpm run lint
+
+      - name: Type check (tsc)
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build

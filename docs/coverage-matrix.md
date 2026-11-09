@@ -20,23 +20,23 @@ scrape" posture — not a recurring probe). Results:
   that field alone is far too sparse to be the primary specialness signal
   once the source covers everything; useful as one input, not sufficient
   on its own (see the rule-based specialness classifier, Phase 3,
-  [`core/specialness.py`](../src/lanterne/core/specialness.py) and
+  [`core/specialness.py`](../packages/lanterne/src/lanterne/core/specialness.py) and
   [ADR 0009](decisions/0009-specialness-rules-only.md)).
 
 ## Current bespoke scrapers vs. the Paris Ciné Info network
 
-| Source (`src/lanterne/io/scrapers/`) | Venue(s)                                 | On Paris Ciné Info?                                                                                                                    | Showtimes seen | Recommendation                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mk2.py` (removed)                   | MK2 (11 Paris locations)                 | ✅ yes — all 11 rooms present (Bibliothèque, Beaubourg, Nation, Quai de Seine, Gambetta, Quai de Loire, Odéon×2, Bastille×2, Parnasse) | 2,479 combined | **Retired** (2026-07-14, [ADR 0011](decisions/0011-retire-mk2-louxor.md)) — a first exact-dedup-key spot-check wrongly found low overlap (venue-name fragmentation + exact-timestamp matching false-negatived); a corrected fuzzy (venue+date) check confirmed real coverage.                                                                                                                          |
-| `lechampo.py` (removed)              | Le Champo                                | ✅ yes                                                                                                                                 | 100            | **Retired** (2026-07-14, [ADR 0012](decisions/0012-retire-lechampo.md)) — the 2026-07-14 spot-check was inconclusive (a year-less-date extraction bug rejected both of that week's listings), but a direct live query confirmed Paris Ciné Info reports 89 current Le Champo showtimes; retired on the same evidence standard as MK2/Le Louxor rather than fixing a bug in a scraper no longer needed. |
-| `louxor.py` (removed)                | Le Louxor                                | ✅ yes                                                                                                                                 | 108            | **Retired** (2026-07-14, [ADR 0011](decisions/0011-retire-mk2-louxor.md)) — same correction as MK2; Le Louxor's Paris Ciné Info programme (Tati retrospective, "Dans la chaleur de la nuit" cycle) matched the bespoke scraper's own findings almost exactly once compared correctly.                                                                                                                  |
-| `premiereprojo.py`                   | n/a (aggregator, not a venue)            | n/a                                                                                                                                    | n/a            | **Keep** — curated avant-première signal (`avpType == AVPE` for team presence) that Paris Ciné Info's sparse `com` field doesn't reliably replace.                                                                                                                                                                                                                                                     |
-| `paris_cine_info.py`                 | n/a (aggregator, 78 venues)              | —                                                                                                                                      | —              | **Extended** (Phase 2) — full catalogue, no `events=true` filter; a blank-`com` showtime is stored directly as an ordinary screening. Primary width source for Paris intra-muros.                                                                                                                                                                                                                      |
-| `offi.py`                            | n/a (aggregator, ~115 IDF suburb venues) | —                                                                                                                                      | —              | **New** (Phase 2) — Level 4, no LLM (fully tabular DOM). Primary width source for the IDF suburbs, complementing Paris Ciné Info's Paris-only coverage.                                                                                                                                                                                                                                                |
-| `cinematheque.py`                    | La Cinémathèque française                | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
-| `forumdesimages.py`                  | Le Forum des images                      | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
-| `fondationpathe.py`                  | Fondation Jérôme Seydoux-Pathé           | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
-| `lavillette.py`                      | Cinéma en plein air de La Villette       | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source (a seasonal open-air programme, structurally different from a regular cinema anyway).                                                                                                                                                                                                                                                                                   |
+| Source (`packages/lanterne/src/lanterne/io/scrapers/`) | Venue(s)                                 | On Paris Ciné Info?                                                                                                                    | Showtimes seen | Recommendation                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mk2.py` (removed)                                     | MK2 (11 Paris locations)                 | ✅ yes — all 11 rooms present (Bibliothèque, Beaubourg, Nation, Quai de Seine, Gambetta, Quai de Loire, Odéon×2, Bastille×2, Parnasse) | 2,479 combined | **Retired** (2026-07-14, [ADR 0011](decisions/0011-retire-mk2-louxor.md)) — a first exact-dedup-key spot-check wrongly found low overlap (venue-name fragmentation + exact-timestamp matching false-negatived); a corrected fuzzy (venue+date) check confirmed real coverage.                                                                                                                          |
+| `lechampo.py` (removed)                                | Le Champo                                | ✅ yes                                                                                                                                 | 100            | **Retired** (2026-07-14, [ADR 0012](decisions/0012-retire-lechampo.md)) — the 2026-07-14 spot-check was inconclusive (a year-less-date extraction bug rejected both of that week's listings), but a direct live query confirmed Paris Ciné Info reports 89 current Le Champo showtimes; retired on the same evidence standard as MK2/Le Louxor rather than fixing a bug in a scraper no longer needed. |
+| `louxor.py` (removed)                                  | Le Louxor                                | ✅ yes                                                                                                                                 | 108            | **Retired** (2026-07-14, [ADR 0011](decisions/0011-retire-mk2-louxor.md)) — same correction as MK2; Le Louxor's Paris Ciné Info programme (Tati retrospective, "Dans la chaleur de la nuit" cycle) matched the bespoke scraper's own findings almost exactly once compared correctly.                                                                                                                  |
+| `premiereprojo.py`                                     | n/a (aggregator, not a venue)            | n/a                                                                                                                                    | n/a            | **Keep** — curated avant-première signal (`avpType == AVPE` for team presence) that Paris Ciné Info's sparse `com` field doesn't reliably replace.                                                                                                                                                                                                                                                     |
+| `paris_cine_info.py`                                   | n/a (aggregator, 78 venues)              | —                                                                                                                                      | —              | **Extended** (Phase 2) — full catalogue, no `events=true` filter; a blank-`com` showtime is stored directly as an ordinary screening. Primary width source for Paris intra-muros.                                                                                                                                                                                                                      |
+| `offi.py`                                              | n/a (aggregator, ~115 IDF suburb venues) | —                                                                                                                                      | —              | **New** (Phase 2) — Level 4, no LLM (fully tabular DOM). Primary width source for the IDF suburbs, complementing Paris Ciné Info's Paris-only coverage.                                                                                                                                                                                                                                                |
+| `cinematheque.py`                                      | La Cinémathèque française                | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
+| `forumdesimages.py`                                    | Le Forum des images                      | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
+| `fondationpathe.py`                                    | Fondation Jérôme Seydoux-Pathé           | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source.                                                                                                                                                                                                                                                                                                                                                                        |
+| `lavillette.py`                                        | Cinéma en plein air de La Villette       | ❌ no                                                                                                                                  | 0              | **Keep bespoke** — only source (a seasonal open-air programme, structurally different from a regular cinema anyway).                                                                                                                                                                                                                                                                                   |
 
 ## Full venue list seen on Paris Ciné Info (78)
 
@@ -110,7 +110,7 @@ never printed with a year (only "Lundi 13 Juillet"); the page's eight day
 tabs (`#t_0`..`#t_7`) were confirmed to always be sequential days starting
 from the fetch date, so the date is computed by arithmetic rather than
 parsed from that text. Implemented — see
-[`offi.py`](../src/lanterne/io/scrapers/offi.py).
+[`offi.py`](../packages/lanterne/src/lanterne/io/scrapers/offi.py).
 
 ## Remaining open items
 
@@ -126,7 +126,7 @@ Resolved during Phase 2 implementation (2026-07-13):
 Resolved during Phase 3 implementation (2026-07-13):
 
 1. ~~Specialness classification pipeline~~ — implemented as
-   [`core/specialness.py`](../src/lanterne/core/specialness.py), a
+   [`core/specialness.py`](../packages/lanterne/src/lanterne/core/specialness.py), a
    rule-based cascade (team presence, cycle name, institution venue, film
    age/rarity) run in `IngestionPipeline` right after film enrichment. No
    LLM fallback — see [ADR 0009](decisions/0009-specialness-rules-only.md)
@@ -192,6 +192,67 @@ Resolved (2026-07-14, robustness pass):
    same "known-true facts win" posture already proven in
    `paris_cine_info.py`.
 
+Resolved (2026-07-21, venue address/coverage audit):
+
+1. ~~Every `needs_review` (`NAME_SEARCH`-geocoded) venue's precise
+   address.~~ All 8 were `OFFI`-sourced; each venue's own offi.fr page
+   carries a real `schema.org/PostalAddress` block (`streetAddress`/
+   `postalCode`/`addressLocality`) the `offi.py` scraper doesn't currently
+   parse (it only reads the programme grid). Matching each stored name
+   against offi.fr's directory resolved 7 of 8 to an exact address —
+   several previous `NAME_SEARCH` guesses were not just imprecise but in
+   the wrong department entirely (`L'Étoile` guessed at Paris's Place
+   Charles de Gaulle is actually in La Courneuve; `Rex` guessed inside
+   Disneyland Paris is actually in Châtenay-Malabry). `La Grange` (id 139)
+   was left `needs_review` at this stage — see the follow-up entry below,
+   it turned out to need more than an address fix. See
+   `scripts/fix_needs_review_venue_addresses.py`.
+1. **offi.fr's full venue directory walked once end-to-end** (every
+   department's paginated listing, not just the venues that happened to
+   have a current scrape), to check whether every IDF suburb cinema is at
+   least present in the `Venue` table, even without programme coverage
+   yet — prompted by a report that "Les Yeux d'Elsa" (Saint-Cyr-l'École)
+   was missing. Found 166 venues on offi.fr's current listing pages; 4 had
+   no `Venue` row at all (`Chaplin` Mantes-la-Jolie, `Méliès` Nemours,
+   `Rotonde` Étampes, `Cinéma Jacques Prévert` Gonesse — each confirmed
+   live to be a distinct building from every same/similar-named row
+   already stored). "Les Yeux d'Elsa" itself is *not* on offi.fr's current
+   directory pages despite having its own offi.fr page — the town's own
+   site says it "reopened its doors", suggesting it dropped off the
+   listing during a closure. All 5 added as bare `Venue` rows (name,
+   address, kind — no `Screen`/scraper coverage) via
+   `scripts/add_missing_idf_venues.py`. **Caveat**: offi.fr's listing pages
+   are the best single source checked so far, not a guaranteed-exhaustive
+   census — a fully exhaustive IDF venue count would need a primary source
+   like the CNC's official cinema registry to close that gap with
+   confidence.
+
+Resolved (2026-07-22, `offi.py` homonym-venue fix):
+
+1. **`La Grange`'s stuck `needs_review` flag, and the architecture gap
+   behind it.** The CNC registry (a public open-data source — see
+   `data.culture.gouv.fr/explore/dataset/etablissements-cinematographiques/`)
+   confirms three distinct "La Grange" cinemas in Île-de-France, and
+   offi.fr's own pages render at least two of them (Roissy-en-Brie,
+   Vaux-le-Pénil) under the exact same plain text — Bois-d'Arcy's is
+   officially "La Grange de la Tremblaye", which avoids the collision on
+   its own. Unlike `paris_cine_info.py`, `offi.py` carried no per-venue
+   external id, so `VenueRepository.resolve`'s name-based `slug` matching
+   silently conflated every homonym's screenings into one row — a real
+   risk of a genuine screening being dropped as a false duplicate of the
+   other venue's at a coincidentally identical time, not just a cosmetic
+   address problem. Fixed durably rather than patched once: every
+   `offi.py` sighting now carries its venue page's own URL slug as
+   `venue_external_id` (new `Venue.offi_slug` column), and `resolve`
+   checks whether a name-matched row already claims a *different* external
+   id for the source before trusting it — see
+   `test_ingest_does_not_conflate_two_homonym_venues` and the CHANGELOG's
+   matching entry for the full mechanism. The three real cinemas were
+   added as separate rows (two pre-stamped with their known `offi_slug` so
+   the next `scrape` run routes to them directly) via
+   `scripts/add_disambiguated_la_grange_venues.py`; the old conflated row
+   (id 139) is left to age out on its own via `prune-db`.
+
 Still open:
 
 1. **`normalize_text` too weak for real-world wording variance — the film
@@ -212,7 +273,7 @@ Still open:
    plus a batch-pass architecture fix), and an evaluation harness exists
    (`uv run lanterne eval-specialness`, see `docs/testing.md`) scoring
    accuracy/precision/recall against
-   [`eval/golden_specialness.json`](../eval/golden_specialness.json). The
+   [`eval/golden_specialness.json`](../packages/lanterne/eval/golden_specialness.json). The
    hand-built golden set is still small — but every classified screening's
    full feature vector and verdict is now logged as structured JSONL
    (`"msg":"specialness verdict"`, both fired and not-fired, see

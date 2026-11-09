@@ -2,26 +2,36 @@
 
 ## Running the suite
 
+The suite is scoped to the `lanterne` package (see
+[ADR 0015](decisions/0015-uv-workspace-monorepo.md)) — run it via `--directory`
+from the repository root, or `cd` into the package first:
+
 ```fish
-uv run pytest                       # full suite + coverage (fails under 80%)
-uv run pytest tests/test_qa.py      # one file
-uv run pytest -k dedup              # tests matching a keyword
-uv run pytest tests/test_qa.py::test_format_qa_answer_without_events
+uv run --directory packages/lanterne pytest                       # full suite + coverage (fails under 80%)
+uv run --directory packages/lanterne pytest tests/test_qa.py      # one file
+uv run --directory packages/lanterne pytest -k dedup              # tests matching a keyword
+uv run --directory packages/lanterne pytest tests/test_qa.py::test_format_qa_answer_without_events
 ```
 
-Coverage is enforced at **80%** project-wide (`--cov-fail-under=80` in
-`pyproject.toml`); the suite currently sits around 90%+. The uncovered remainder
-is the composition roots in `main.py` (real network/Telegram/Ollama wiring),
-which are validated manually rather than unit-tested.
+Coverage is enforced at **80%** (`--cov-fail-under=80` in
+`packages/lanterne/pyproject.toml`); the suite currently sits around 90%+. The
+uncovered remainder is the composition roots in `main.py` (real
+network/Telegram/Ollama wiring), which are validated manually rather than
+unit-tested.
 
 ## Conventions
 
 - **Async tests** run under `pytest-asyncio` in `auto` mode — just write
   `async def test_...`; no decorator needed.
-- **No network in tests.** External I/O is always mocked or faked:
-  - the **database** uses a real in-memory SQLite via the shared `database` /
-    `session` fixtures in `tests/conftest.py` (a `StaticPool` keeps the schema
-    across sessions);
+- **No network in tests**, except the database, which is deliberately real —
+  see [ADR 0016](decisions/0016-tests-on-postgres.md). Every other external
+  I/O is mocked or faked:
+  - the **database** runs against a real PostgreSQL container
+    (`testcontainers`), one per test session, migrated once via the actual
+    Alembic path (`Database.migrate_to_head`) — not a schema built ad hoc
+    from metadata. The shared `database`/`session` fixtures in
+    `tests/conftest.py` truncate every table before each test for isolation.
+    Requires a Docker daemon to run `pytest` at all, locally and in CI;
   - **HTTP** (scrapers, TMDB) uses `MagicMock` clients with `AsyncMock` `.get`;
   - the **LLM** (Instructor) and the **Telegram bot** are mocked.
 - **Scraper parsing** is tested against committed, trimmed real-markup fixtures
@@ -54,10 +64,10 @@ which are validated manually rather than unit-tested.
 The pre-commit hook runs them automatically; to run by hand:
 
 ```fish
-uv run ruff check .       # lint — must be empty (zero warnings)
-uv run ruff format .      # formatting
-uv run mypy src           # strict type checking
-uv run pytest             # tests + coverage
+uv run ruff check .                                  # lint — must be empty (zero warnings)
+uv run ruff format .                                 # formatting
+uv run mypy packages/lanterne/src                    # strict type checking
+uv run --directory packages/lanterne pytest          # tests + coverage
 ```
 
 ## Evaluating the LLM extraction (offline harness)
@@ -70,7 +80,7 @@ calls, so it needs a reachable `OLLAMA_BASE_URL`):
 uv run lanterne eval-extraction
 ```
 
-It runs the extractor over `eval/golden_extractions.json` (announcement texts
+It runs the extractor over `packages/lanterne/eval/golden_extractions.json` (announcement texts
 paired with the expected structured event) and reports per-field accuracy,
 exact-match rate, and mean latency. Run it before and after any model or
 prompt change, and when comparing candidate models.
@@ -91,7 +101,7 @@ since the classifier and its inputs are pure, in-memory data:
 uv run lanterne eval-specialness
 ```
 
-It runs the classifier over `eval/golden_specialness.json` (labeled
+It runs the classifier over `packages/lanterne/eval/golden_specialness.json` (labeled
 screenings: venue kind, team presence, cycle name, release year, and the two
 aggregate counts `distinct_venue_count`/`weekly_showing_count`) and reports
 accuracy, precision, and recall against each case's `expected_special` label.
